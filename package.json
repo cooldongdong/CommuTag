@@ -10,7 +10,6 @@
   },
   "dependencies": {
     "async": "^3.2.2",
-    "bcrypt": "^5.0.1",
     "bcryptjs": "^2.4.3",
     "connect-mongodb-session": "^3.1.1",
     "cropperjs": "^1.7.0",
@@ -40,7 +39,7 @@
     "quasar": "^1.22.10",
     "request": "^2.88.0",
     "rimraf": "^3.0.0",
-    "sharp": "^0.30.5",
+    "sharp": "^0.34.5",
     "spacetime": "^6.16.3",
     "uuid": "^3.3.3",
     "vue": "^2.7.16"
@@ -48,7 +47,7 @@
   "devDependencies": {
     "@vitejs/plugin-vue2": "^2.3.4",
     "chai": "^4.2.0",
-    "chai-http": "^4.3.0",
+    "chai-http": "^4.4.0",
     "cheerio": "^1.0.0-rc.12",
     "mocha": "^10.2.0",
     "sass": "^1.107.1",

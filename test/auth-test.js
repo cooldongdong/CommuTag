@@ -6,7 +6,7 @@ var mongoose = require('mongoose');
 var app = require("../server.js");
 var Dataset = require("../app/db/dataset");
 var User = require("../app/db/user");
-var bcrypt = require('bcrypt');
+var bcrypt = require('bcryptjs');
 var async = require("async");
 var rimraf = require("rimraf");
 
