@@ -1,6 +1,6 @@
 var Config = require('../../config');
 var URL = require('url');
-var csrf = require('csurf');
+var csrfSync = require('csrf-sync').csrfSync;
 var Dataset = require('../db/dataset');
 var ImageModel = require("../db/imageSchema").ImageModel;
 
@@ -144,6 +144,14 @@ util.UpdateDatasetStatistic = async function(param){
 };
 
 
-util.CSRF = csrf();
+// Synchronizer-token CSRF protection (csurf is deprecated). The token lives in the
+// session; pages put it in <meta name="csrf-token">, and the frontend sends it back
+// as the csrf-token header or the _csrf form field. GET/HEAD/OPTIONS are not checked.
+var csrf = csrfSync({
+	getTokenFromRequest: function(req){
+		return req.headers["csrf-token"] || req.headers["x-csrf-token"] || (req.body && req.body._csrf);
+	}
+});
+util.CSRF = csrf.csrfSynchronisedProtection;
 
 module.exports = util;

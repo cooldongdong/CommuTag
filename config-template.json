@@ -15,12 +15,6 @@
 		"clientSecret": "YOUR_GOOGLE_CLIENT_SECRET",
 		"callbackURL": "YOUR_GOOGLE_LOGIN_CALLBACK"
 	},
-	"elasticEmail": {
-		"enable": true,
-		"apiKey": "YOUR_ELASTIC_EMAIL_API_KEY",
-		"sender": "YOUR_ELASTIC_EMAIL_SENDER",
-		"url": "https://api.elasticemail.com/v2/email/send"
-	},
 	"session": {
 		"secret": "YOUR_SESSION_SECRET"
 	},
@@ -52,5 +46,16 @@
 		"accessKeyId": "",
 		"secretAccessKey": "",
 		"forcePathStyle": false
+	},
+	"email": {
+		"enable": false,
+		"sender": "YOUR_ELASTIC_EMAIL_SENDER",
+		"smtp": {
+			"host": "",
+			"port": 587,
+			"secure": false,
+			"user": "",
+			"pass": ""
+		}
 	}
 }

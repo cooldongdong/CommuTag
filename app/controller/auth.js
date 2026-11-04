@@ -1,6 +1,6 @@
 var passport = require("passport");
 var FacebookStrategy = require('passport-facebook').Strategy;
-var GoogleStrategy = require('passport-google-oauth').OAuth2Strategy;
+var GoogleStrategy = require('passport-google-oauth20').Strategy;
 var LocalStrategy = require('passport-local').Strategy;
 var bcrypt = require('bcryptjs');
 var jwt = require('jsonwebtoken')
@@ -128,7 +128,7 @@ auth.ForgetPassword = function(req, res, next){
 	var email = req.body.email;
 	(async function(){
 		var user = await User.findOne({"provider": "local", "signupEmail": email});
-		if(!Config.elasticEmail.enable){
+		if(!Config.email.enable){
 			return res.json({status: "fail", message: 'send email not enabled'});
 		}
 		if(user){

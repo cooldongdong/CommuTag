@@ -1,81 +1,50 @@
-var request = require('request');
-var Config = require('../../config');
-var ejs = require('ejs');
+// Sends the sign-up and password-reset emails over SMTP, so any provider works
+// (Gmail / Google Workspace, Resend, Mailgun, SES...). It used to call the
+// ElasticEmail HTTP API directly through the deprecated `request` package.
+var nodemailer = require("nodemailer");
+var ejs = require("ejs");
+var Config = require("../../config");
+
+var conf = Config.email || {};
+var transport = conf.enable ? nodemailer.createTransport({
+	host: conf.smtp.host,
+	port: conf.smtp.port,
+	secure: !!conf.smtp.secure,
+	auth: {user: conf.smtp.user, pass: conf.smtp.pass}
+}) : null;
 
 var emailer = {};
-var fromName = Config.siteName;
-var sender = Config.elasticEmail.sender;
-var headers = {
-	"Content-Type": "application/x-www-form-urlencoded"
+
+async function Send(to, subject, template, data){
+	if(!transport) return;
+	try{
+		var html = await ejs.renderFile(template, data);
+		await transport.sendMail({
+			from: {name: Config.siteName, address: conf.sender},
+			to: to,
+			subject: subject,
+			html: html
+		});
+	}
+	catch(err){
+		console.log(err);
+	}
 }
-var url = Config.elasticEmail.url;
-var method = "POST";
 
 emailer.SendSignupConfirmEmail = function(user){
-	if(!Config.elasticEmail.enable) return;
-
-	ejs.renderFile('view/email/signupConfirm.ejs', {
+	if(!user.signupEmail) return;
+	Send(user.signupEmail, Config.siteName+" 註冊確認信", "view/email/signupConfirm.ejs", {
 		user: user,
 		hostname: Config.hostname,
 		siteName: Config.siteName
-	}, {}, function(err, html){
-		if(err) console.log(err);
-		var options = {
-			url: url,
-			method: method,
-			headers: headers,
-			form: {
-				"apikey": Config.elasticEmail.apiKey,
-				"from": sender,
-				"fromName": fromName,
-				"to": user.signupEmail,
-				"subject": Config.siteName+" 註冊確認信",
-				"bodyHtml":html,
-				"isTransactional ": true
-			}
-		}
-
-		request(options, function (error, response, body) {
-			if(error) console.log(error);
-			if (!error && response.statusCode == 200) {
-				//console.log(body)
-			}
-		})
 	});
-	
 };
 
-emailer.SendResetPasswordEmail = function(user,token){
-	if(!Config.elasticEmail.enable) return;
-	
-	var resetUrl = Config.hostname+"/login?reset=1&token="+token;
-	ejs.renderFile('view/email/resetPassword.ejs', {
-		user: user, 
-		resetUrl: resetUrl,
+emailer.SendResetPasswordEmail = function(user, token){
+	Send(user.signupEmail, Config.siteName+" 密碼重設", "view/email/resetPassword.ejs", {
+		user: user,
+		resetUrl: Config.hostname+"/login?reset=1&token="+token,
 		siteName: Config.siteName
-	}, {}, function(err, html){
-		if(err) console.log(err);
-		var options = {
-			url: url,
-			method: method,
-			headers: headers,
-			form: {
-				"apikey": Config.elasticEmail.apiKey,
-				"from": sender,
-				"fromName": fromName,
-				"to": user.signupEmail,
-				"subject": Config.siteName+" 密碼重設",
-				"bodyHtml":html,
-				"isTransactional ": true
-			}
-		}
-
-		request(options, function (error, response, body) {
-			if(error) console.log(error);
-			if (!error && response.statusCode == 200) {
-				//console.log(body)
-			}
-		})
 	});
 };
 

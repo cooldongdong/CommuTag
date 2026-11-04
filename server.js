@@ -3,9 +3,8 @@ var ejs = require("ejs");
 var passport = require("passport");
 var session = require("express-session");
 var MongoDBStore = require('connect-mongodb-session')(session);
-var bodyParser = require("body-parser");
 var mongoose = require("mongoose");
-var fs = require("fs-extra");
+var fs = require("fs");
 var path = require('path');
 var morgan = require('morgan');
 
@@ -49,7 +48,7 @@ var sessionStore = new MongoDBStore(options);
 
 var logPath = path.join(__dirname, 'log/')
 if (!fs.existsSync(logPath)){
-	fs.mkdirpSync(logPath);
+	fs.mkdirSync(logPath, {recursive: true});
 }
 var accessLogStream = fs.createWriteStream(logPath+"access.log", { flags: 'a' })
 app.use(morgan("short",{ stream: accessLogStream }));
@@ -68,8 +67,8 @@ app.use(session({
     }
 }));
 
-app.use(bodyParser.urlencoded({extended: true,limit: '5mb'}));
-app.use(bodyParser.json());
+app.use(express.urlencoded({extended: true,limit: '5mb'}));
+app.use(express.json({limit: '5mb'}));
 app.use(passport.initialize());
 app.use(passport.session());
 
