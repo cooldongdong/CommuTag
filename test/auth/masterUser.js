@@ -12,14 +12,14 @@ var rimraf = require("rimraf");
 var cheerio = require('cheerio');
 var ImageSchema = require("../../app/db/imageSchema");
 
+// Mongoose 7+ dropped callbacks; adapt a promise to the (err, result) callbacks used below.
+function cb(promise, fn){ promise.then(function(r){ fn(null, r); }, function(e){ fn(e); }); }
+
 chai.use(chaiHttp);
 var agent = chai.request.agent(app);
 var expect = chai.expect;
 
-mongoose.connect(Config.mongodb.url,{
-	useNewUrlParser: true,
-	useUnifiedTopology: true,
-});
+mongoose.connect(Config.mongodb.url);
 mongoose.pluralize(null);
 
 var userAdd = {
@@ -67,7 +67,7 @@ describe("版主權限測試", function() {
 			function(next){
 				var newUser = Object.assign({},userAdd.master);
 				newUser.password = bcrypt.hashSync(newUser.password, saltRounds);
-				User.create(newUser, function(err,result){
+				cb(User.create(newUser), function(err,result){
 					if(err) console.log(err);
 					user.master = result;
 					next();
@@ -75,7 +75,7 @@ describe("版主權限測試", function() {
 			},
 			function(next){
 				datasetAdd.allOn.master = [user.master];
-				Dataset.create(datasetAdd.allOn, function(err,result){
+				cb(Dataset.create(datasetAdd.allOn), function(err,result){
 					if(err) console.log(err);
 					dataset.allOn = result;
 					next();
@@ -83,7 +83,7 @@ describe("版主權限測試", function() {
 			},
 			function(next){
 				datasetAdd.allOff.master = [user.master];
-				Dataset.create(datasetAdd.allOff, function(err,result){
+				cb(Dataset.create(datasetAdd.allOff), function(err,result){
 					if(err) console.log(err);
 					dataset.allOff = result;
 					next();
@@ -91,7 +91,7 @@ describe("版主權限測試", function() {
 			},
 			function(next){
 				var Image = mongoose.model("image"+dataset.allOn._id.toString(), ImageSchema);
-				Image.create({},function(err, result){
+				cb(Image.create({}), function(err, result){
 					if(err) console.log(err);
 					image.allOn = result;
 					next();
@@ -99,7 +99,7 @@ describe("版主權限測試", function() {
 			},
 			function(next){
 				var Image = mongoose.model("image"+dataset.allOff._id.toString(), ImageSchema);
-				Image.create({},function(err, result){
+				cb(Image.create({}), function(err, result){
 					if(err) console.log(err);
 					image.allOff = result;
 					next();
@@ -107,7 +107,7 @@ describe("版主權限測試", function() {
 			},
 			function(next){
 				var Image = mongoose.model("image"+dataset.allOn._id.toString(), ImageSchema);
-				Image.create({annotation:{user:{_id:"123"}, annotation:[]}},function(err, result){
+				cb(Image.create({annotation:{user:{_id:"123"}, annotation:[]}}), function(err, result){
 					if(err) console.log(err);
 					image.hasAnnotation = result;
 					next();
@@ -115,7 +115,7 @@ describe("版主權限測試", function() {
 			},
 			function(next){
 				var Image = mongoose.model("image"+dataset.allOn._id.toString(), ImageSchema);
-				Image.create({},function(err, result){
+				cb(Image.create({}), function(err, result){
 					if(err) console.log(err);
 					image.forDelete = result;
 					next();
@@ -656,7 +656,7 @@ describe("版主權限測試", function() {
 					rimraf.sync("static/upload/user/"+userID);
 				}
 				//console.log(idArr);
-				User.deleteMany({_id:idArr}, function(err){
+				cb(User.deleteMany({_id:idArr}), function(err){
 					if(err) console.log(err);
 					next();
 				});
@@ -672,14 +672,14 @@ describe("版主權限測試", function() {
 				//delete related image collection
 				for(var i=0;i<idArr.length;i++){
 					mongoose.connection.db.listCollections({name: "image"+idArr[i]})
-					.next(function(err, info) {
+					.next().then(function(info) {
 						if(info) {
 							mongoose.connection.db.dropCollection(info.name);
 						}
 					});
 				}
 				//console.log(idArr);
-				Dataset.deleteMany({_id:idArr}, function(err){
+				cb(Dataset.deleteMany({_id:idArr}), function(err){
 					if(err) console.log(err);
 					next();
 				});

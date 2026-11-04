@@ -1,23 +1,24 @@
-var Config = require('../../config');
-var util = require("./util");
 var Favorite = require("../db/favorite");
-var mongoose = require('mongoose');
 
 var favoriteController = {};
 
+function Run(param, fn, failMessage){
+	fn().then(function(result){
+		param.succFunc(result);
+	}).catch(function(err){
+		console.log(err);
+		param.failFunc({err: failMessage});
+	});
+}
 
 favoriteController.AddFavorite = function(param){
 	var data = {
 		userID: param.user._id.toString(),
 		datasetID: param.dataset
 	};
-	Favorite.updateOne(data,data,{upsert:true},function(err, favorite){
-		if(err){
-			console.log(err);
-			return param.failFunc({err:"create favorite fail"});
-		}
-		param.succFunc(favorite);
-	});
+	Run(param, function(){
+		return Favorite.updateOne(data,data,{upsert:true});
+	}, "create favorite fail");
 };
 
 favoriteController.RemoveFavorite = function(param){
@@ -25,13 +26,10 @@ favoriteController.RemoveFavorite = function(param){
 		userID: param.user._id.toString(),
 		datasetID: param.dataset
 	};
-	Favorite.deleteOne(data,function(err){
-		if(err){
-			console.log(err);
-			return param.failFunc({err:"remove favorite fail"});
-		}
-		param.succFunc(data);
-	});
+	Run(param, async function(){
+		await Favorite.deleteOne(data);
+		return data;
+	}, "remove favorite fail");
 };
 
 favoriteController.ListFavorite = function(param){
@@ -42,13 +40,9 @@ favoriteController.ListFavorite = function(param){
 	if(param.dataset){
 		query.datasetID = param.dataset;
 	}
-	Favorite.find(query,function(err, favorite){
-		if(err){
-			console.log(err);
-			return param.failFunc({err:"list favorite fail"});
-		}
-		param.succFunc(favorite);
-	});
+	Run(param, function(){
+		return Favorite.find(query);
+	}, "list favorite fail");
 };
 
 module.exports = favoriteController;

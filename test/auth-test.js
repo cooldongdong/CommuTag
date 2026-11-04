@@ -10,14 +10,14 @@ var bcrypt = require('bcryptjs');
 var async = require("async");
 var rimraf = require("rimraf");
 
+// Mongoose 7+ dropped callbacks; adapt a promise to the (err, result) callbacks used below.
+function cb(promise, fn){ promise.then(function(r){ fn(null, r); }, function(e){ fn(e); }); }
+
 chai.use(chaiHttp);
 var agent = chai.request.agent(app);
 var expect = chai.expect;
 
-mongoose.connect(Config.mongodb.url,{
-	useNewUrlParser: true,
-	useUnifiedTopology: true,
-});
+mongoose.connect(Config.mongodb.url);
 mongoose.pluralize(null);
 
 var userAdd = {
@@ -85,7 +85,7 @@ describe("權限測試", function() {
 			function(next){
 				var newUser = Object.assign({},userAdd.normal);
 				newUser.password = bcrypt.hashSync(newUser.password, saltRounds);
-				User.create(newUser, function(err,result){
+				cb(User.create(newUser), function(err,result){
 					if(err) console.log(err);
 					user.normal = result;
 					next();
@@ -94,7 +94,7 @@ describe("權限測試", function() {
 			function(next){
 				var newUser = Object.assign({},userAdd.admin);
 				newUser.password = bcrypt.hashSync(newUser.password, saltRounds);
-				User.create(newUser, function(err,result){
+				cb(User.create(newUser), function(err,result){
 					if(err) console.log(err);
 					user.admin = result;
 					next();
@@ -103,7 +103,7 @@ describe("權限測試", function() {
 			function(next){
 				var newUser = Object.assign({},userAdd.member);
 				newUser.password = bcrypt.hashSync(newUser.password, saltRounds);
-				User.create(newUser, function(err,result){
+				cb(User.create(newUser), function(err,result){
 					if(err) console.log(err);
 					user.member = result;
 					next();
@@ -112,7 +112,7 @@ describe("權限測試", function() {
 			function(next){
 				var newUser = Object.assign({},userAdd.master);
 				newUser.password = bcrypt.hashSync(newUser.password, saltRounds);
-				User.create(newUser, function(err,result){
+				cb(User.create(newUser), function(err,result){
 					if(err) console.log(err);
 					user.master = result;
 					next();
@@ -121,7 +121,7 @@ describe("權限測試", function() {
 			function(next){
 				var newUser = Object.assign({},userAdd.blacklist);
 				newUser.password = bcrypt.hashSync(newUser.password, saltRounds);
-				User.create(newUser, function(err,result){
+				cb(User.create(newUser), function(err,result){
 					if(err) console.log(err);
 					user.blacklist = result;
 					next();
@@ -130,7 +130,7 @@ describe("權限測試", function() {
 			function(next){
 				datasetAdd.allOn.member = [{_id: user.member._id}];
 				datasetAdd.allOn.master = [{_id: user.master._id}];
-				Dataset.create(datasetAdd.allOn, function(err,result){
+				cb(Dataset.create(datasetAdd.allOn), function(err,result){
 					if(err) console.log(err);
 					dataset.allOn = result;
 					next();
@@ -139,7 +139,7 @@ describe("權限測試", function() {
 			function(next){
 				datasetAdd.allOff.member = [{_id: user.member._id}];
 				datasetAdd.allOff.master = [{_id: user.master._id}];
-				Dataset.create(datasetAdd.allOff, function(err,result){
+				cb(Dataset.create(datasetAdd.allOff), function(err,result){
 					if(err) console.log(err);
 					dataset.allOf = result;
 					next();
@@ -357,7 +357,7 @@ describe("權限測試", function() {
 					rimraf.sync("../static/upload/user/"+userID);
 				}
 				//console.log(idArr);
-				User.deleteMany({_id:idArr}, function(err){
+				cb(User.deleteMany({_id:idArr}), function(err){
 					if(err) console.log(err);
 					next();
 				});
@@ -371,7 +371,7 @@ describe("權限測試", function() {
 					rimraf.sync("../static/file/"+datasetID);
 				}
 				//console.log(idArr);
-				Dataset.deleteMany({_id:idArr}, function(err){
+				cb(Dataset.deleteMany({_id:idArr}), function(err){
 					if(err) console.log(err);
 					next();
 				});

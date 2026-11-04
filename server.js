@@ -18,10 +18,7 @@ var DatasetRoute = require("./app/route/datasetRoute.js");
 var FavoriteRoute = require("./app/route/favoriteRoute.js");
 var ApiRoute = require("./app/route/apiRoute.js");
 
-mongoose.connect(Config.mongodb.url,{
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-});
+mongoose.connect(Config.mongodb.url);
 mongoose.pluralize(null);
 
 //setup view & static file

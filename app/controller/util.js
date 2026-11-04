@@ -2,10 +2,7 @@ var Config = require('../../config');
 var URL = require('url');
 var csrf = require('csurf');
 var Dataset = require('../db/dataset');
-var mongoose = require('mongoose');
-
-//每個dataset存成一個collection，必免資料太大存取很慢
-var ImageSchema = require("../db/imageSchema");
+var ImageModel = require("../db/imageSchema").ImageModel;
 
 var util = {};
 
@@ -43,6 +40,28 @@ util.RandomInt = function(max) {
 	return Math.floor(Math.random() * Math.floor(max));
 };
 
+// User input goes into $regex in several queries; escape it so it matches literally
+// and cannot be used to send a catastrophic-backtracking pattern to the database.
+util.EscapeRegex = function(str){
+	return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
+
+function IsMaster(dataset, user){
+	return (dataset.master || []).some(function(master){
+		return user._id.toString() == master._id.toString();
+	});
+}
+
+async function FindDataset(id){
+	try{
+		return await Dataset.findOne({"_id": id});
+	}
+	catch(err){
+		console.log(err);
+		return null;
+	}
+}
+
 util.CheckLogin = function (req, res, next) {
 	if (req.isAuthenticated()) return next();
 	PermissionDenied(req, res);
@@ -62,56 +81,34 @@ util.CheckMaster = function (req, res, next) {
 	var id = req.query.dataset || req.body.dataset;
 	if(!id) return PermissionDenied(req, res);
 
-	Dataset.findOne({"_id": id}, function(err, dataset) {
-		if(err){
-			console.log(err);
-			return PermissionDenied(req, res);
-		}
+	FindDataset(id).then(function(dataset){
 		if(!dataset) return PermissionDenied(req, res);
-		var isMaster = dataset.master.filter(function(master){
-			return req.user._id.toString() == master._id.toString();
-		});
-		if(isMaster.length > 0) return next();
-		else return PermissionDenied(req, res);
+		if(IsMaster(dataset, req.user)) return next();
+		return PermissionDenied(req, res);
 	});
 };
 
 util.CheckImageEdit = function (req, res, next) {
-	if(req.user){
-		if (req.user.authType == "admin") return next();
-		var id = req.query.dataset || req.body.dataset;
-		if(!id) return PermissionDenied(req, res);
+	if(!req.user) return PermissionDenied(req, res);
+	if (req.user.authType == "admin") return next();
+	var id = req.query.dataset || req.body.dataset;
+	if(!id) return PermissionDenied(req, res);
 
-		Dataset.findOne({"_id": id}, function(err, dataset) {
-			if(err){
-				console.log(err);
-				return PermissionDenied(req, res);
-			}
-			if(!dataset) return PermissionDenied(req, res);
-			var isMaster = dataset.master.filter(function(master){
-				return req.user._id.toString() == master._id.toString();
-			});
-			if(isMaster.length > 0) return next();
-			else{
-				//確認是否為使用者自己上傳的影像
-				var Image = mongoose.model("image"+id, ImageSchema);
-				Image.findOne({_id:req.body.image},function(err, image){
-					if(err){
-						console.log(err);
-						return PermissionDenied(req, res);
-					}
-					if(!image) return PermissionDenied(req, res);
-					if(!image.uploader) return PermissionDenied(req, res);
-					if(req.user._id.toString() == image.uploader.toString()){
-						return next();
-					}
-					return PermissionDenied(req, res);
-				});
-			}
-		});
-	}
-	else PermissionDenied(req, res);
-	
+	(async function(){
+		var dataset = await FindDataset(id);
+		if(!dataset) return false;
+		if(IsMaster(dataset, req.user)) return true;
+		//確認是否為使用者自己上傳的影像
+		var image = await ImageModel(id).findOne({_id:req.body.image});
+		if(!image || !image.uploader) return false;
+		return req.user._id.toString() == image.uploader.toString();
+	})().then(function(allowed){
+		if(allowed) return next();
+		PermissionDenied(req, res);
+	}).catch(function(err){
+		console.log(err);
+		PermissionDenied(req, res);
+	});
 };
 
 util.CheckBlacklist = function (req, res, next) {
@@ -127,35 +124,24 @@ util.FailRedirect = function(req, res, redirect, message){
 	else return res.redirect(redirect+"?message="+encodeURIComponent(message));
 };
 
-util.UpdateDatasetStatistic = function(param){
-	return new Promise(function(resolve, reject) {
-		var Image = mongoose.model("image"+param.dataset, ImageSchema);
-		Image.aggregate([
-			{$group: {
-				_id:null,
-				picNum: {$sum:1},
-				annotationNum: {
-					$sum: {
-						$cond: [{$ne: ["$annotation", null]}, 1, 0]
-					}
-				},
-			}},
-			{$project:{ _id:0}}
-		],function(err, result){
-			if(!result) return reject({err:"aggregate image statistic fail"});
-			if(result.length == 0){
-				result.push({picNum:0,annotationNum:0});
-			}
-			Dataset.updateOne({_id:param.dataset},result[0],function(err,dataset){
-				if(err){
-					console.log(err);
-					return reject({err:"update dataset fail"});
+util.UpdateDatasetStatistic = async function(param){
+	var result = await ImageModel(param.dataset).aggregate([
+		{$group: {
+			_id:null,
+			picNum: {$sum:1},
+			annotationNum: {
+				$sum: {
+					$cond: [{$ne: ["$annotation", null]}, 1, 0]
 				}
-				return resolve();
-			});
-		});
-	});
-}
+			},
+		}},
+		{$project:{ _id:0}}
+	]);
+	if(result.length == 0){
+		result.push({picNum:0,annotationNum:0});
+	}
+	await Dataset.updateOne({_id:param.dataset},result[0]);
+};
 
 
 util.CSRF = csrf();

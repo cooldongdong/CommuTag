@@ -11,7 +11,7 @@ var User = require("../db/user");
 
 
 //==========================passport strategy============================
-function CreateUser(provider, profile, done){
+async function CreateUser(provider, profile){
 	var newUser = {};
 	newUser.provider = provider;
 	if(profile.id) newUser.oauthID = profile.id;
@@ -38,11 +38,9 @@ function CreateUser(provider, profile, done){
 	}
 	newUser.photo = "/static/image/user-default.png";
 	newUser.icon = "/static/image/user-default-icon.png";
-	User.create(newUser, function(err, user){
-		if(err) return console.log(err);
-		emailer.SendSignupConfirmEmail(user);
-		if(done) return done(null,user);
-	});
+	var user = await User.create(newUser);
+	emailer.SendSignupConfirmEmail(user);
+	return user;
 }
 
 passport.serializeUser(function(user, done) {
@@ -50,58 +48,52 @@ passport.serializeUser(function(user, done) {
 });
 
 passport.deserializeUser(function(id, done) {
-	User.findOne({_id:id}, {"__v":0,"password":0,"oauthID":0},function(err, user){
-		done(null,user);
-    });
+	User.findOne({_id:id}, {"__v":0,"password":0,"oauthID":0})
+	.then(function(user){ done(null,user); })
+	.catch(function(err){ done(err); });
 });
 
-passport.use(new FacebookStrategy({
-	clientID        : Config.facebookAuth.clientID,
-	clientSecret    : Config.facebookAuth.clientSecret,
-	callbackURL     : Config.facebookAuth.callbackURL,
-	profileFields: ['id', 'email', 'name']},
-	function(token, refreshToken, profile, done) {
-		User.findOne({"provider": "facebook", "oauthID": profile.id},function(err, user) {
-			if(err) console.log(err);
-			if(user) {
-				return done(null,user);
-			}
-			else CreateUser("facebook",profile,done);
-		});
-	}
-));
+function OAuthVerify(provider){
+	return function(token, refreshToken, profile, done) {
+		User.findOne({"provider": provider, "oauthID": profile.id})
+		.then(function(user){
+			return user || CreateUser(provider, profile);
+		})
+		.then(function(user){ done(null, user); })
+		.catch(function(err){ done(err); });
+	};
+}
 
-passport.use(new GoogleStrategy({
-    clientID        : Config.googleAuth.clientID,
-    clientSecret    : Config.googleAuth.clientSecret,
-    callbackURL     : Config.googleAuth.callbackURL},
-    function(token, refreshToken, profile, done) {
-		User.findOne({"provider": "google", "oauthID": profile.id},function(err, user){
-			if(err) console.log(err);
-			if(user){
-				return done(null,user);
-			}
-			else CreateUser("google",profile,done);
-		});
-	}
-));
+if(Config.facebookAuth.enable){
+	passport.use(new FacebookStrategy({
+		clientID        : Config.facebookAuth.clientID,
+		clientSecret    : Config.facebookAuth.clientSecret,
+		callbackURL     : Config.facebookAuth.callbackURL,
+		profileFields: ['id', 'email', 'name']},
+		OAuthVerify("facebook")
+	));
+}
+
+if(Config.googleAuth.enable){
+	passport.use(new GoogleStrategy({
+		clientID        : Config.googleAuth.clientID,
+		clientSecret    : Config.googleAuth.clientSecret,
+		callbackURL     : Config.googleAuth.callbackURL},
+		OAuthVerify("google")
+	));
+}
 
 passport.use(new LocalStrategy({
     usernameField: "email",
     passwordField: "password"},
 	function(email, password, done) {
-		User.findOne({"provider": "local", "signupEmail": email},function(err, user) {
-			if(err) console.log(err);
-			if(user) {
-				bcrypt.compare(password, user.password, function(err, result) {
-					if(result) return done(null,user);
-					else return done(null, false);
-				});
-			}
-			else{
-				return done(null,false);
-			}
-		});
+		User.findOne({"provider": "local", "signupEmail": email})
+		.then(async function(user){
+			if(!user || !user.password) return done(null, false);
+			var match = await bcrypt.compare(password, user.password);
+			done(null, match ? user : false);
+		})
+		.catch(function(err){ done(err); });
 	}
 ));
 
@@ -116,42 +108,40 @@ auth.Signup = function(req, res, next){
 	var password = req.body.password;
 	var name = req.body.name;
 
-	User.findOne({"provider": "local", "signupEmail": email},function(err, user) {
-		if(err) console.log(err);
-		if(user) res.redirect('/login?message='+encodeURIComponent('帳號已存在'));
-		else{
-			var profile = {};
-			profile.emails = [{value: email}];
-			profile.password = bcrypt.hashSync(password, saltRounds);
-			profile.signupName = name;
-			CreateUser("local",profile,function(err,user){
-				//直接login
-				req.login(user, function(err) {
-					if(err) return next(err);
-					return res.redirect(util.RetrieveIntentUrl(req));
-				});
-			});
-		}
-	});
+	(async function(){
+		var exist = await User.findOne({"provider": "local", "signupEmail": email});
+		if(exist) return res.redirect('/login?message='+encodeURIComponent('帳號已存在'));
+		var user = await CreateUser("local", {
+			emails: [{value: email}],
+			password: await bcrypt.hash(password, saltRounds),
+			signupName: name
+		});
+		//直接login
+		req.login(user, function(err) {
+			if(err) return next(err);
+			return res.redirect(util.RetrieveIntentUrl(req));
+		});
+	})().catch(next);
 }
 
 auth.ForgetPassword = function(req, res, next){
 	var email = req.body.email;
-	User.findOne({"provider": "local", "signupEmail": email},function(err, user) {
-		if(err) console.log(err);
+	(async function(){
+		var user = await User.findOne({"provider": "local", "signupEmail": email});
+		if(!Config.elasticEmail.enable){
+			return res.json({status: "fail", message: 'send email not enabled'});
+		}
 		if(user){
 			var token = jwt.sign({id: user.id, email: user.signupEmail}, Config.jwt.secret, {
 				expiresIn: "1h"
 			});
-			if(Config.elasticEmail.enable){
-				emailer.SendResetPasswordEmail(user,token);
-				res.json({status: "ok", message: 'reset password email sent'});
-			}
-			else{
-				res.json({status: "fail", message: 'send email not enabled'});
-			}
+			emailer.SendResetPasswordEmail(user,token);
 		}
-	});
+		// Same answer whether or not the account exists, so this endpoint cannot be
+		// used to find out which emails are registered. It used to never respond
+		// when the account did not exist.
+		res.json({status: "ok", message: 'reset password email sent'});
+	})().catch(next);
 }
 
 auth.ResetPassword = function(req, res, next){
@@ -161,44 +151,29 @@ auth.ResetPassword = function(req, res, next){
 		if(err){
 			return res.json({status: "fail", message: 'invalid token'});
 		}
-		else {
-			User.findOne({_id: decoded.id},function(err, user){
-				if(err) console.log(err);
-				if(!user) return res.json({status: "fail", message: 'reset password fail'});
-				else{
-					var hash = bcrypt.hashSync(password, saltRounds);
-					User.updateOne({_id: decoded.id}, {password: hash}, function(){
-						res.json({status: "ok", message: 'reset password ok'});
-					});
-				}
-			});
-		}
+		(async function(){
+			var user = await User.findOne({_id: decoded.id});
+			if(!user) return res.json({status: "fail", message: 'reset password fail'});
+			var hash = await bcrypt.hash(password, saltRounds);
+			await User.updateOne({_id: decoded.id}, {password: hash});
+			res.json({status: "ok", message: 'reset password ok'});
+		})().catch(next);
 	});
 }
 
 auth.ChangePassword = function(req, res, next){
-	var oldPassword = req.body.data.oldPassword;
-	var newPassword = req.body.data.newPassword;
-	User.findOne({_id: req.user._id},function(err, user){
-		if(err) console.log(err);
+	if(!req.user) return res.json({status: "fail", message: 'not login'});
+	var data = req.body.data || {};
+	(async function(){
+		var user = await User.findOne({_id: req.user._id});
 		if(!user) return res.json({status: "fail", message: 'user not found'});
-		else{
-			if(user.provider != "local") return res.json({status: "fail", message: 'not local user'});
-			bcrypt.compare(oldPassword, user.password, function(err, result) {
-				if(err){
-					console.log(err);
-					res.json({status: "fail", message: 'invalid password'});
-				}
-				if(result){
-					var hash = bcrypt.hashSync(newPassword, saltRounds);
-					User.updateOne({_id: user._id}, {password: hash}, function(){
-						res.json({status: "ok", message: 'change password ok'});
-					});
-				}
-				else return res.json({status: "fail", message: 'password not match'});
-			});
-		}
-	});
+		if(user.provider != "local") return res.json({status: "fail", message: 'not local user'});
+		var match = await bcrypt.compare(data.oldPassword || "", user.password);
+		if(!match) return res.json({status: "fail", message: 'password not match'});
+		var hash = await bcrypt.hash(data.newPassword, saltRounds);
+		await User.updateOne({_id: user._id}, {password: hash});
+		res.json({status: "ok", message: 'change password ok'});
+	})().catch(next);
 }
 
 module.exports = auth;

@@ -29,4 +29,12 @@ var ImageSchema = new mongoose.Schema({
 	dataTime: Date
 },{timestamps: {createdAt:"createdAt", updatedAt:"updatedAt"} });
 
+// Each dataset still lives in its own collection ("image<datasetId>").
+// Every caller goes through this helper so the storage layout can change in one place.
+function ImageModel(datasetID){
+	var name = "image"+datasetID;
+	return mongoose.models[name] || mongoose.model(name, ImageSchema);
+}
+
 module.exports = ImageSchema;
+module.exports.ImageModel = ImageModel;

@@ -3,61 +3,70 @@ var util = require("./util");
 var Dataset = require('../db/dataset');
 var Favorite = require('../db/favorite');
 var mongoose = require('mongoose');
-const { exec } = require('child_process');
-var fs   = require("fs-extra");
-
-//每個dataset存成一個collection，必免資料太大存取很慢
-var ImageSchema = require("../db/imageSchema");
+var ImageModel = require("../db/imageSchema").ImageModel;
 
 var datasetController = {};
 
-function CheckDatasetAuth(param){
-	return new Promise(function(resolve, reject) {
-		Dataset.findOne({_id:param.dataset},{"__v":0})
-		.exec(function(err, result){
-			if(err){
-				console.log(err);
-				return reject({err:"find dataset fail"});
+function IsInList(list, user){
+	return (list || []).some(function(m){
+		return m._id.toString() == user._id.toString();
+	});
+}
+
+async function CheckDatasetAuth(param){
+	var result;
+	try{
+		result = await Dataset.findOne({_id:param.dataset},{"__v":0});
+	}
+	catch(err){
+		console.log(err);
+		throw {err:"find dataset fail"};
+	}
+	if(!result) throw {err:"dataset not found"};
+	if(param.checkUpload && !result.enableUpload) throw {err:"upload not enabled"};
+	if(param.checkAnnotation && !result.enableAnnotation) throw {err:"annotation not enabled"};
+	if(param.checkDownload && !result.enableDownload) throw {err:"download not enabled"};
+	if(param.checkView && !result.isPublic){
+		//不公開的資料集，管理員、版主跟私密成員才能看
+		if(!param.user) throw {err:"view not allowed"};
+		if(param.user.authType != "admin"){
+			if(!IsInList(result.member, param.user) && !IsInList(result.master, param.user)){
+				throw {err:"view not allowed"};
 			}
-			if(!result){
-				return reject({err:"dataset not found"});
-			}
-			if(param.checkUpload && !result.enableUpload){
-				return reject({err:"upload not enabled"});
-			}
-			if(param.checkAnnotation && !result.enableAnnotation){
-				return reject({err:"annotation not enabled"});
-			}
-			if(param.checkDownload && !result.enableDownload){
-				return reject({err:"download not enabled"});
-			}
-			if(param.checkView && !result.isPublic){
-				//不公開的資料集，管理員、版主跟私密成員才能看
-				if(!param.user) return reject({err:"view not allowed"});
-				if(param.user.authType != "admin"){
-					var isMember = result.member.filter(function(m){
-						return m._id.toString() == param.user._id.toString();
-					});
-					var isMaster = result.master.filter(function(m){
-						return m._id.toString() == param.user._id.toString();
-					});
-					if(isMember.length == 0 && isMaster.length == 0){
-						return reject({err:"view not allowed"});
-					}
-				}
-			}
-			return resolve(result);
-		});
+		}
+	}
+	return result;
+}
+datasetController.CheckDatasetAuth = CheckDatasetAuth;
+
+// Runs an async handler and routes its outcome to the param callbacks the routes expect.
+function Run(param, fn){
+	fn().then(function(result){
+		if(result !== undefined) param.succFunc(result);
+	}).catch(function(err){
+		if(!err || !err.err){
+			console.log(err);
+			err = {err:"internal error"};
+		}
+		param.failFunc(err);
+	});
+}
+
+function RefreshStatistic(dataset){
+	util.UpdateDatasetStatistic({dataset: dataset}).catch(function(err){
+		console.log(err);
 	});
 }
 
 datasetController.CreateDataset = function(param){
-	Dataset.create({},function(err, dataset){
-		if(err){
-			console.log(err);
-			return param.failFunc({err:"create dataset fail"});
+	Run(param, async function(){
+		try{
+			return await Dataset.create({});
 		}
-		param.succFunc(dataset);
+		catch(err){
+			console.log(err);
+			throw {err:"create dataset fail"};
+		}
 	});
 };
 
@@ -69,36 +78,40 @@ datasetController.UpdateDataset = function(param){
 	if(!param.info.master){
 		param.info.master = [];
 	}
-	Dataset.updateOne({_id:param.info._id},param.info,function(err, dataset){
-		if(err){
-			console.log(err);
-			return param.failFunc({err:"update dataset fail"});
+	Run(param, async function(){
+		try{
+			return await Dataset.updateOne({_id:param.info._id},param.info);
 		}
-		param.succFunc(dataset);
+		catch(err){
+			console.log(err);
+			throw {err:"update dataset fail"};
+		}
 	});
 };
 
 datasetController.DeleteDataset = function(param){
-	Dataset.deleteOne({_id:param.id},function(err){
-		if(err){
+	Run(param, async function(){
+		try{
+			await Dataset.deleteOne({_id:param.id});
+		}
+		catch(err){
 			console.log(err);
-			return param.failFunc({err:"delete dataset fail"});
+			throw {err:"delete dataset fail"};
 		}
 		//delete related image collection
-		mongoose.connection.db.listCollections({name: "image"+param.id})
-		.next(function(err, info) {
-			if(info) {
-				mongoose.connection.db.dropCollection("image"+param.id);
-			}
-		});
-		param.succFunc({_id:param.id});
+		var name = "image"+param.id;
+		var found = await mongoose.connection.db.listCollections({name: name}).toArray();
+		if(found.length > 0){
+			await mongoose.connection.db.dropCollection(name);
+		}
+		return {_id:param.id};
 	});
 };
 
 datasetController.ListDataset = function(param){
 	var condition = [];
 	if(param.keyword){
-		var regex = {"$regex": param.keyword,"$options": "i"};
+		var regex = {"$regex": util.EscapeRegex(param.keyword),"$options": "i"};
 		condition.push({"$or":[
 			{name: regex},
 			{desc: regex}
@@ -127,101 +140,76 @@ datasetController.ListDataset = function(param){
 		sortOption[param.sort] = param.orderType=="desc"?-1:1;
 	}
 
-	function FindDataset(query,sort){
+	Run(param, async function(){
+		if(param.favorite == "1"){
+			if(!param.user) return {hasMore:false,dataset:[]};
+			var favorite;
+			try{
+				favorite = await Favorite.find({userID: param.user._id.toString()});
+			}
+			catch(err){
+				console.log(err);
+				throw {err:"list favorite fail"};
+			}
+			if(favorite.length == 0) return {hasMore:false,dataset:[]};
+			queryOption._id = favorite.map(function(d){
+				return d.datasetID;
+			});
+		}
+
 		var limit = 8;
 		var skip = (param.page||0)*limit;
-		Dataset.find(query,{"__v":0},{limit:limit+1, skip:skip})
-		.sort(sort)
-		.exec(function(err, dataset){
-			if(err){
-				console.log(err);
-				return param.failFunc({err:"list dataset fail"});
-			}
-			var result = {};
-			if(dataset.length > limit){
-				result.hasMore = true;
-				result.dataset = dataset.slice(0,-1);
-			}
-			else{
-				result.hasMore = false;
-				result.dataset = dataset;
-			}
-			param.succFunc(result);
-		});
-	}
-
-	if(param.favorite == "1"){
-		var query = {};
-		query.userID = param.user._id.toString();
-		Favorite.find(query,function(err, favorite){
-			if(err){
-				console.log(err);
-				return param.failFunc({err:"list favorite fail"});
-			}
-			if(favorite.length > 0){
-				queryOption._id = favorite.map(function(d){
-					return d.datasetID;
-				});
-				FindDataset(queryOption,sortOption);
-			}
-			else{
-				return param.succFunc({hasMore:false,dataset:[]});
-			}
-		});
-	}
-	else FindDataset(queryOption,sortOption);
-
+		var dataset;
+		try{
+			dataset = await Dataset.find(queryOption,{"__v":0},{limit:limit+1, skip:skip}).sort(sortOption);
+		}
+		catch(err){
+			console.log(err);
+			throw {err:"list dataset fail"};
+		}
+		if(dataset.length > limit){
+			return {hasMore: true, dataset: dataset.slice(0,-1)};
+		}
+		return {hasMore: false, dataset: dataset};
+	});
 };
 
 datasetController.ListDatasetByID = function(param){
-	var query = {};
-	query._id = param.id.split(",");
-	Dataset.find(query,{"name":1,"picCover":1})
-		.exec(function(err, dataset){
-			if(err){
-				console.log(err);
-				return param.failFunc({err:"list dataset fail"});
-			}
-			param.succFunc(dataset);
-		});
+	Run(param, async function(){
+		try{
+			return await Dataset.find({_id: {$in: param.id.split(",")}},{"name":1,"picCover":1});
+		}
+		catch(err){
+			console.log(err);
+			throw {err:"list dataset fail"};
+		}
+	});
 };
 
 datasetController.ViewDataset = function(param){
-	CheckDatasetAuth({
-		dataset: param.id,
-		user: param.user,
-		checkView: true
-	})
-	.then(function(result){
-		param.succFunc(result);
-	})
-	.catch(function(err){
-		param.failFunc(err);
+	Run(param, function(){
+		return CheckDatasetAuth({
+			dataset: param.id,
+			user: param.user,
+			checkView: true
+		});
 	});
 };
 
 datasetController.ViewImage = function(param){
-	CheckDatasetAuth({
-		dataset: param.dataset,
-		user: param.user,
-		checkView: true
-	})
-	.then(function(result){
-		var Image = mongoose.model("image"+param.dataset, ImageSchema);
-		Image.findOne({_id:param.image},{"__v":0})
-		.exec(function(err, image){
-			if(err){
-				console.log(err);
-				return param.failFunc({err:"find image fail"});
-			}
-			if(param.all == "1"){
-				param.succFunc(images);
-			}
-			param.succFunc(image);
+	Run(param, async function(){
+		await CheckDatasetAuth({
+			dataset: param.dataset,
+			user: param.user,
+			checkView: true
 		});
-	})
-	.catch(function(err){
-		param.failFunc(err);
+		try{
+			return await ImageModel(param.dataset).findOne({_id:param.image},{"__v":0});
+		}
+		catch(err){
+			console.log(err);
+			throw {err:"find image fail"};
+		}
 	});
 };
 
@@ -229,25 +217,26 @@ datasetController.ChangeCover = function(param){
 	var randomStr = "?rand="+Math.floor(Math.random()*100);
 	var modify = {};
 	modify.picCover = param.picCover+randomStr;
-
-	Dataset.updateOne({"_id": param.id}, modify, function(err, result) {
-		if(err){
-			console.log(err);
-			return param.failFunc({"err": "change cover fail"});
+	Run(param, async function(){
+		try{
+			await Dataset.updateOne({"_id": param.id}, modify);
 		}
-		param.succFunc(modify);
+		catch(err){
+			console.log(err);
+			throw {"err": "change cover fail"};
+		}
+		return modify;
 	});
 };
 
 datasetController.UploadImage = function(param){
-	CheckDatasetAuth({
-		dataset: param.dataset,
-		user: param.user,
-		checkView: true,
-		checkUpload: true
-	})
-	.then(function(dataset){
-		var Image = mongoose.model("image"+param.dataset, ImageSchema);
+	Run(param, async function(){
+		await CheckDatasetAuth({
+			dataset: param.dataset,
+			user: param.user,
+			checkView: true,
+			checkUpload: true
+		});
 		var newImage = {};
 		newImage.lat = param.lat;
 		newImage.lng = param.lng;
@@ -256,145 +245,127 @@ datasetController.UploadImage = function(param){
 		newImage.formReply = param.formReply;
 		newImage.uploadFrom = "user";
 		newImage.uploader = param.user._id.toString();
-		Image.create(newImage,function(err, result){
-			if(err){
-				console.log(err);
-				return param.failFunc({err:"create image fail"});
-			}
-			util.UpdateDatasetStatistic({dataset: param.dataset});
-			param.succFunc(result);
-		});
-	})
-	.catch(function(err){
-		param.failFunc(err);
+		var result;
+		try{
+			result = await ImageModel(param.dataset).create(newImage);
+		}
+		catch(err){
+			console.log(err);
+			throw {err:"create image fail"};
+		}
+		RefreshStatistic(param.dataset);
+		return result;
 	});
-
 };
 
 datasetController.ListImage = function(param){
-	CheckDatasetAuth({
-		dataset: param.dataset,
-		user: param.user,
-		checkView: true
-	})
-	.then(function(result){
+	Run(param, async function(){
+		await CheckDatasetAuth({
+			dataset: param.dataset,
+			user: param.user,
+			checkView: true
+		});
 		var limit = 8;
 		var skip = (param.page||0)*limit;
-		var Image = mongoose.model("image"+param.dataset, ImageSchema);
-
 		var option = {};
 		if(param.all != "1"){
 			option.limit = limit+1;
 			option.skip = skip;
 		}
-		Image.find({},{"__v":0},option)
-		.sort({"createdAt":-1})
-		.exec(function(err, images){
-			if(err){
-				console.log(err);
-				return param.failFunc({err:"list image fail"});
-			}
-			if(param.all == "1"){
-				param.succFunc(images);
-			}
-			else{
-				var result = {};
-				if(images.length > limit){
-					result.hasMore = true;
-					result.images = images.slice(0,-1);
-				}
-				else{
-					result.hasMore = false;
-					result.images = images;
-				}
-				param.succFunc(result);
-			}
-		});
-	})
-	.catch(function(err){
-		param.failFunc(err);
+		var images;
+		try{
+			images = await ImageModel(param.dataset).find({},{"__v":0},option).sort({"createdAt":-1});
+		}
+		catch(err){
+			console.log(err);
+			throw {err:"list image fail"};
+		}
+		if(param.all == "1") return images;
+		if(images.length > limit){
+			return {hasMore: true, images: images.slice(0,-1)};
+		}
+		return {hasMore: false, images: images};
 	});
-
 };
 
 datasetController.ListImageForAnnotation = function(param){
-	CheckDatasetAuth({
-		dataset: param.dataset,
-		user: param.user,
-		checkView: true
-	})
-	.then(function(result){
-		var Image = mongoose.model("image"+param.dataset, ImageSchema);
-		var condition = "this.verifyNum < "+Config.verify.sample+" || this.agreeNum < this.verifyNum*"+Config.verify.accept;
-		Image.find({},{"__v":0})
-		.$where(condition)
-		.exec(function(err, images){
-			if(err){
-				console.log(err);
-				return param.failFunc({err:"list image for annotation fail"});
-			}
-			param.succFunc(images);
+	Run(param, async function(){
+		await CheckDatasetAuth({
+			dataset: param.dataset,
+			user: param.user,
+			checkView: true
 		});
-	})
-	.catch(function(err){
-		param.failFunc(err);
+		// Not yet verified: fewer votes than the sample size, or agreement below the accept ratio.
+		// Same condition as the old server-side JavaScript $where, without running JS in MongoDB.
+		var query = {$or: [
+			{verifyNum: {$lt: Config.verify.sample}},
+			{$expr: {$lt: ["$agreeNum", {$multiply: ["$verifyNum", Config.verify.accept]}]}}
+		]};
+		try{
+			return await ImageModel(param.dataset).find(query,{"__v":0});
+		}
+		catch(err){
+			console.log(err);
+			throw {err:"list image for annotation fail"};
+		}
 	});
-
 };
 
 datasetController.UpdateImageInfo = function(param){
-	CheckDatasetAuth({
-		dataset: param.dataset,
-		user: param.user,
-		checkView: true,
-	})
-	.then(function(dataset){
-		var Image = mongoose.model("image"+param.dataset, ImageSchema);
-		Image.updateOne({_id:param.image},param,function(err,image){
-			if(err){
-				console.log(err);
-				return param.failFunc({err:"update image fail"});
-			}
-			util.UpdateDatasetStatistic({dataset: param.dataset});
-			param.succFunc(image);
+	Run(param, async function(){
+		await CheckDatasetAuth({
+			dataset: param.dataset,
+			user: param.user,
+			checkView: true,
 		});
-	})
-	.catch(function(err){
-		param.failFunc(err);
+		var update = {
+			dataTime: param.dataTime,
+			remark: param.remark,
+			lat: param.lat,
+			lng: param.lng,
+			formReply: param.formReply
+		};
+		var result;
+		try{
+			result = await ImageModel(param.dataset).updateOne({_id:param.image},update);
+		}
+		catch(err){
+			console.log(err);
+			throw {err:"update image fail"};
+		}
+		RefreshStatistic(param.dataset);
+		return result;
 	});
 };
 
 datasetController.DeleteImage = function(param){
-	CheckDatasetAuth({
-		dataset: param.dataset,
-		user: param.user,
-		checkView: true,
-	})
-	.then(function(dataset){
-		var Image = mongoose.model("image"+param.dataset, ImageSchema);
-		Image.deleteOne({_id:param.image},function(err){
-			if(err){
-				console.log(err);
-				return param.failFunc({err:"delete image fail"});
-			}
-			util.UpdateDatasetStatistic({dataset: param.dataset});
-			param.succFunc({_id:param.image});
+	Run(param, async function(){
+		await CheckDatasetAuth({
+			dataset: param.dataset,
+			user: param.user,
+			checkView: true,
 		});
-	})
-	.catch(function(err){
-		param.failFunc(err);
+		try{
+			await ImageModel(param.dataset).deleteOne({_id:param.image});
+		}
+		catch(err){
+			console.log(err);
+			throw {err:"delete image fail"};
+		}
+		RefreshStatistic(param.dataset);
+		return {_id:param.image};
 	});
 };
 
 datasetController.SetAnnotation = function(param){
-	CheckDatasetAuth({
-		dataset: param.dataset,
-		user: param.user,
-		checkView: true,
-		checkAnnotation: true
-	})
-	.then(function(dataset){
-		var Image = mongoose.model("image"+param.dataset, ImageSchema);
+	Run(param, async function(){
+		var dataset = await CheckDatasetAuth({
+			dataset: param.dataset,
+			user: param.user,
+			checkView: true,
+			checkAnnotation: true
+		});
+		var Image = ImageModel(param.dataset);
 		var data = null;
 		if(param.user && param.annotation){
 			data = {};
@@ -406,139 +377,93 @@ datasetController.SetAnnotation = function(param){
 			verification: [],
 			verifyNum:0,
 			agreeNum:0
+		};
+		var image;
+		try{
+			image = await Image.findOne({_id:param.image});
 		}
-		Image.findOne({_id:param.image},function(err, image){
-			if(err){
-				console.log(err);
-				return param.failFunc({err:"find image fail"});
-			}
-			if(!image) return param.failFunc({err:"no image"});
+		catch(err){
+			console.log(err);
+			throw {err:"find image fail"};
+		}
+		if(!image) throw {err:"no image"};
 
-			//check if user can modify annotation
-			var editable = !image.annotation;
-			if(image.annotation){
-				var isMaster = dataset.master.filter(function(master){
-					return param.user._id.toString() == master._id.toString();
-				});
-				if(param.user.authType == "admin") editable = true;
-				else if(isMaster.length > 0) editable = true;
-				else if(param.user._id.toString() == image.annotation.user){
-					editable = true;
-				}
+		//check if user can modify annotation
+		var editable = !image.annotation;
+		if(image.annotation){
+			if(param.user.authType == "admin") editable = true;
+			else if(IsInList(dataset.master, param.user)) editable = true;
+			else if(param.user._id.toString() == image.annotation.user){
+				editable = true;
 			}
-			if(!editable) return param.failFunc({err:"auth fail"});
-			
-			//update annotation
-			Image.updateOne({_id:param.image},update,function(err, result){
-				if(err){
-					console.log(err);
-					return param.failFunc({err:"update annotation fail"});
-				}
-				util.UpdateDatasetStatistic({dataset: param.dataset});
-				param.succFunc(result);
-			});
-		});
-		
-	})
-	.catch(function(err){
-		param.failFunc(err);
+		}
+		if(!editable) throw {err:"auth fail"};
+
+		var result;
+		try{
+			result = await Image.updateOne({_id:param.image},update);
+		}
+		catch(err){
+			console.log(err);
+			throw {err:"update annotation fail"};
+		}
+		RefreshStatistic(param.dataset);
+		return result;
 	});
-
 };
 
 datasetController.AddVerification = function(param){
-	CheckDatasetAuth({
-		dataset: param.dataset,
-		user: param.user,
-		checkView: true,
-		checkAnnotation: true
-	})
-	.then(function(dataset){
-		var Image = mongoose.model("image"+param.dataset, ImageSchema);
+	Run(param, async function(){
+		await CheckDatasetAuth({
+			dataset: param.dataset,
+			user: param.user,
+			checkView: true,
+			checkAnnotation: true
+		});
 		var data = {};
 		data.user = param.user._id.toString();
 		data.agree = param.agree;
-		Image.findOne({_id:param.image},function(err, image){
-			if(err){
-				console.log(err);
-				return param.failFunc({err:"find image fail"});
-			}
-			if(!image) return param.failFunc({err:"image not found"});
-			
-			var duplicate = image.verification.filter(function(v){
-				return v.user == data.user;
-			});
-			if(duplicate.length > 0){
-				return param.failFunc({err:"verification duplicate"});
-			}
-			else{
-				image.verification.push(data);
-				image.verifyNum++;
-				image.agreeNum += data.agree=="1"?1:0;
-				image.save(function(err, saved){
-					if(err){
-						console.log(err);
-						return param.failFunc({err:"update verification fail"});
-					}
-					util.UpdateDatasetStatistic({dataset: param.dataset});
-					param.succFunc(image);
-				});
-			}
-		});
-	})
-	.catch(function(err){
-		param.failFunc(err);
-	});
+		var image;
+		try{
+			image = await ImageModel(param.dataset).findOne({_id:param.image});
+		}
+		catch(err){
+			console.log(err);
+			throw {err:"find image fail"};
+		}
+		if(!image) throw {err:"image not found"};
 
+		var duplicate = image.verification.some(function(v){
+			return v.user == data.user;
+		});
+		if(duplicate) throw {err:"verification duplicate"};
+
+		image.verification.push(data);
+		image.verifyNum++;
+		image.agreeNum += data.agree=="1"?1:0;
+		try{
+			await image.save();
+		}
+		catch(err){
+			console.log(err);
+			throw {err:"update verification fail"};
+		}
+		RefreshStatistic(param.dataset);
+		return image;
+	});
 };
 
+// The old implementation shelled out to Python with request fields pasted into the
+// command line (command injection). It is rebuilt in Node in a later change.
 datasetController.BatchDownload = function(param){
-	CheckDatasetAuth({
-		dataset: param.dataset,
-		user: param.user,
-		checkDownload: true,
-	})
-	.then(function(dataset){
-		var ext = "zip";
-		var path = "/static/file/"+param.dataset;
-		path +="/batchDownload_"+param.filter+"_"+param.format+"."+ext;
-
-		function GenerateZip(){
-			//create another process to avoid blocking
-			var cmd = "python python/batchDownload/BatchDownload.py";
-			cmd += " "+param.dataset;
-			cmd += " "+param.filter;
-			cmd += " "+param.format;
-
-			exec(cmd, function(error, stdout, stderr){
-				console.log(stdout);
-				console.error(stderr);
-				if(error){
-					return console.log(error);
-				}
-				param.succFunc(path);
-			});
-		}
-
-		//check if file exist and up to date
-		var dir = __dirname+"/../..";
-		if(fs.existsSync(dir+path)){
-			var stats = fs.statSync(dir+path);
-			var datasetTime = new Date(dataset.updatedAt);
-			var fileTime = new Date(stats.mtime);
-			if(datasetTime.getTime() <= fileTime.getTime()) {
-				console.log("file is up to date");
-				param.succFunc(path);
-			}
-			else GenerateZip();
-		}
-		else GenerateZip();
-
-	})
-	.catch(function(err){
-		param.failFunc(err);
+	Run(param, async function(){
+		await CheckDatasetAuth({
+			dataset: param.dataset,
+			user: param.user,
+			checkDownload: true,
+		});
+		throw {err:"batch download temporarily unavailable"};
 	});
-
 };
 
 module.exports = datasetController;
