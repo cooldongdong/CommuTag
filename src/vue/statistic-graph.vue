@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="statistic-graph" v-if="dataset && imageArr">
 		<div class="row items-center q-col-gutter-md q-pa-md">
 			<div class="col-12 col-sm-6 column">
@@ -66,6 +66,8 @@
 </template>
 
 <script>
+import Plotly from "plotly.js-basic-dist-min"
+import spacetime from "spacetime"
 
 import util from "../js/util.js"
 import imageInfoFilter from "./image-info-filter.vue"

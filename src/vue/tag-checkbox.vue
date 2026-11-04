@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="tag-checkbox">
 		<q-btn class="q-ma-sm bg-brown-8" @click="openTagSelect = true;">{{btTitle}}</q-btn>
 		<q-dialog v-model="openTagSelect">

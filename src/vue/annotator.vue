@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="annotator bg-grey-9">
 		<div class="fit" v-if="datasetSelect && imageSelect && taskSelect">
 			<annotator-image v-if="datasetSelect.annotationType=='image' " ref="annotatorImage" :dataset="datasetSelect" :image="imageSelect" :task="taskSelect" @setAnnotation="UploadAnnotation" @setVerification="UploadVerification" @skipTask="SkipTask"></annotator-image>

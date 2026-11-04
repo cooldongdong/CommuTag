@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<q-card class="dataset-select full-width q-pa-sm">
 		<q-card-section>
 			<div class="text-h6">選擇資料集</div>

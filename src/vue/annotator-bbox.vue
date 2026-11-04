@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="annotator-bbox">
 		<img class="hidden" ref="srcImage" :src="image.url" @load="ChangeImage">
 
@@ -99,6 +99,8 @@
 </template>
 
 <script>
+import Konva from "konva"
+import L from "../js/leaflet.js"
 import tagSelect from "./tag-select.vue"
 
 export default {

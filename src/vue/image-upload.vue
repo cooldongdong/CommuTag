@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="image-upload">
 		<img :src="imageData" v-show="showPreview">
 		<input type="file" ref="uploadBt" hidden @change="UpdateFile">
@@ -6,6 +6,8 @@
 </template>
 
 <script>
+import heic2any from "heic2any"
+import ExifReader from "exifreader"
 
 export default {
 	name:"image-upload",

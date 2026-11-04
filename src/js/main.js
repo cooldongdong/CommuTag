@@ -1,9 +1,8 @@
-
-import mainApp from "../vue/main-app.vue"
+import Vue from "vue";
+import "./setup.js";
+import mainApp from "../vue/main-app.vue";
 
 new Vue({
   el: "#mainApp",
-  components:{
-    "main-app":mainApp
-  }
+  render: (h) => h(mainApp),
 });

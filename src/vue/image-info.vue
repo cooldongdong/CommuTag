@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<q-card class="image-info full-width q-pa-sm" v-if="dataset">
 		<q-card-section>
 			<div class="text-h6">選擇資料時間</div>
@@ -29,6 +29,7 @@
 </template>
 
 <script>
+import spacetime from "spacetime"
 
 import locationSelect from "./location-select.vue"
 import formReply from "./form-reply.vue"

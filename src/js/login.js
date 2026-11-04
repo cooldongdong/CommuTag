@@ -1,8 +1,8 @@
-import login from "../vue/login.vue"
+import Vue from "vue";
+import "./setup.js";
+import login from "../vue/login.vue";
 
 new Vue({
   el: "#loginApp",
-  components:{
-    "login":login
-  }
+  render: (h) => h(login),
 });

@@ -1,10 +1,11 @@
-<template lang="html">
+<template>
 	<div class="location-select">
 		<div class="map" ref="map"></div>
 	</div>
 </template>
 
 <script>
+import L from "../js/leaflet.js"
 
 export default {
 	name:"location-select",

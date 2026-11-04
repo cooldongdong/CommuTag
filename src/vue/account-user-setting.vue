@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="user-setting">
 		<q-card flat class="q-ma-md transparent">
 			<div class="row q-pa-md justify-center">

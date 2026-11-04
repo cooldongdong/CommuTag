@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="dataset-list">
 		<div class="row q-px-md" v-if="mode == 'edit' ">
 			<q-btn class="bg-grey-8 text-white" icon="add" label="新增資料集" @click="AddDataset();"></q-btn>

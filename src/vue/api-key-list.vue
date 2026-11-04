@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="api-key-list q-pa-md">
 		<div class="row">
 			<div class="col-shrink">

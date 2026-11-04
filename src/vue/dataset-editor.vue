@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<q-card class="dataset-editor">
 		<q-card-section>
 			<div class="text-h6">編輯資料集</div>

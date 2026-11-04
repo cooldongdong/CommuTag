@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<q-layout view="lHh lpr lFf" container class="dataset-statistic bg-grey-1 shadow-2">
 		<q-header>
 			<topbar :user="user"></topbar>

@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="image-control" v-if="dataset && image">
 		<q-card flat class="full-width">
 			<div style="height: 60vh;">
@@ -101,6 +101,7 @@
 </template>
 
 <script>
+import spacetime from "spacetime"
 import annotator from "./annotator.vue"
 import annotatorView from "./annotator-view.vue"
 import locationSelect from "./location-select.vue"

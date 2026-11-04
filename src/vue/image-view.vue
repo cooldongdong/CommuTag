@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<q-layout view="lHh lpr lFf" container class="image-view bg-grey-1 shadow-2">
 		<q-header>
 			<topbar :user="user"></topbar>
@@ -16,6 +16,7 @@
 </template>
 
 <script>
+import spacetime from "spacetime"
 import util from "../js/util.js"
 import "../scss/main.scss"
 import topbar from "./topbar.vue"

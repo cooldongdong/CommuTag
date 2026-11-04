@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<q-layout view="hHh Lpr lFf" container class="account shadow-2 bg-grey-1">
 		<q-header>
 			<topbar useMenu  :user="user" @toggleMenu="openLeftPanel = !openLeftPanel"></topbar>

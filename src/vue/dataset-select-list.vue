@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="dataset-select-list q-pa-sm">
 		<div class="row items-center">
 			<div v-if="enableAdd" class="col-shrink q-pr-lg">

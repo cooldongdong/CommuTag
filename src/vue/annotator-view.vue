@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="annotator-view bg-grey-7">
 		<div class="fit" v-if="dataset && image">
 			<annotator-image v-if="dataset.annotationType=='image' " :dataset="dataset" :image="image" task="view"></annotator-image>

@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="tag-select">
 		<q-select filled dense bg-color="grey-2" v-model="selectTag" use-input hide-selected fill-input input-debounce="0" :options="tagArr" @filter="FilterTag" @input="SelectTag"></q-select>
 		

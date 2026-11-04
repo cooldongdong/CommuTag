@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="annotator-image">
 		<div class="column fit" v-if="task=='view' ">
 			<q-img contain class="col" :src="image.url">

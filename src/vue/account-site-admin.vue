@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="site-admin">
 		<div class="text-h6">管理員名單</div>
 		<user-list ref="adminList" enableAdd enableSearch enableRemove userAuth="admin" @add="AddAdmin" @remove="RemoveAdmin"></user-list>

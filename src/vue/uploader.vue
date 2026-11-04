@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="camera-capture bg-grey-8">
 		<div class="full-width" v-show="stepArr[step] && stepArr[step].id == 'capture' ">
 			<camera-capture ref="cam"></camera-capture>

@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="topbar bg-grey-8 text-white">
 		<q-toolbar square class="q-px-md">
 			<q-btn flat round icon="menu" v-if="useMenu" @click="ToggleMenu();"></q-btn>

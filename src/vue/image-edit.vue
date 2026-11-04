@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="image-edit bg-grey-9">
 		
 		<img ref="image" :src="imageData"></img>
@@ -32,6 +32,8 @@
 </template>
 
 <script>
+import Cropper from "cropperjs"
+import "cropperjs/dist/cropper.css"
 
 export default {
 	name:"image-edit",

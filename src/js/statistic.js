@@ -1,8 +1,8 @@
-import datasetStatistic from "../vue/dataset-statistic.vue"
+import Vue from "vue";
+import "./setup.js";
+import datasetStatistic from "../vue/dataset-statistic.vue";
 
 new Vue({
   el: "#statisticApp",
-  components:{
-    "dataset-statistic":datasetStatistic
-  }
+  render: (h) => h(datasetStatistic),
 });

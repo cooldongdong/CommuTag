@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="image-info-filter q-pa-sm">
 		<div v-if="!disableTag">
 			<div class="text-h6">標籤篩選</div>
@@ -88,6 +88,7 @@
 </template>
 
 <script>
+import spacetime from "spacetime"
 import locationSelect from "./location-select.vue"
 
 export default {

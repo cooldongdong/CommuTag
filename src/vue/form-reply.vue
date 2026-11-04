@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="form-reply">
 		<q-list bordered>
 			<q-item v-for="(item,i) in formData.itemArr" :key="item.id">

@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="statistic-map">
 		<div class="map" ref="map"></div>
 		<q-page-sticky class="z-top" position="bottom-left" :offset="[18, 18]">
@@ -22,6 +22,8 @@
 </template>
 
 <script>
+import L from "../js/leaflet.js"
+import spacetime from "spacetime"
 import imageInfoFilter from "./image-info-filter.vue"
 
 export default {

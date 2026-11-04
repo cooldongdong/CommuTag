@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="form-editor q-pa-sm">
 		<div class="row items-center">
 			<div class="col-shrink q-pr-lg">

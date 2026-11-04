@@ -30,6 +30,7 @@ var app = express();
 app.port = Config.serverPort || 8001;
 app.set('view engine', 'ejs');
 app.set("views", rootDir + "/view");
+app.locals.assets = require("./app/controller/assets.js")(Config.mode == "production");
 app.use('/static',express.static(rootDir + '/static'));
 app.use('/dist',express.static(rootDir + '/dist'));
 

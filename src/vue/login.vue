@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="login">
 		<form ref="loginForm" :action="pwLoginAction" method="POST" class="q-pa-xl" v-show="mode === 'login'">
 			<div class="column" v-if="method.google || method.facebook">

@@ -1,4 +1,4 @@
-<template lang="html">
+<template>
 	<div class="camera-capture bg-grey-9">
 		<video autoplay playsinline muted :srcObject.prop="camStream" ref="video"></video>
 

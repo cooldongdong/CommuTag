@@ -1,8 +1,8 @@
-import imageView from "../vue/image-view.vue"
+import Vue from "vue";
+import "./setup.js";
+import imageView from "../vue/image-view.vue";
 
 new Vue({
   el: "#imageViewApp",
-  components:{
-    "image-view":imageView
-  }
+  render: (h) => h(imageView),
 });
