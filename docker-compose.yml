@@ -1,34 +1,25 @@
-version: '3'
+# Production: the app plus MongoDB. Photos live in Cloudflare R2 (config.json
+# "storage"), so the only state on this machine is the database volume, which
+# scripts/backup-mongo.sh copies to R2 every night.
+#
+# MongoDB has no published port: only the app can reach it, over the internal
+# network. The app listens on 127.0.0.1 only; put a reverse proxy or a
+# Cloudflare Tunnel in front for HTTPS.
 services:
-    mongo:
-        image: mongo:3.6
-        volumes:
-            - mongo-data:/data/db
-        command: mongod --port 27018
-        ports:
-            - '27018:27018'
-        networks:
-            - myapp
-        #network_mode: host
-    commutag:
-        #image: aga3134/commutag:1.5.2
-        build:
-            context: ./
-            dockerfile: Dockerfile
-        volumes:
-            - ./config.json:/CommuTag/config.json
-            - ./log:/CommuTag/log
-            - ./static/upload:/CommuTag/static/upload
-            - ./static/file:/CommuTag/static/file
-        ports:
-            - "8011:8011"
-        depends_on:
-            - mongo
-        networks:
-            - myapp
-        #network_mode: host
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+  commutag:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    volumes:
+      - ./config.json:/app/config.json:ro
+      - ./log:/app/log
+    ports:
+      - "127.0.0.1:8001:8001"
 volumes:
-    mongo-data:
-networks:
-    myapp:
-        driver: bridge
+  mongo-data:

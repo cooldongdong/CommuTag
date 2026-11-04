@@ -43,19 +43,25 @@ storage.Delete = function(key){
 	return client.send(new S3.DeleteObjectCommand({Bucket: Bucket, Key: key}));
 };
 
-storage.DeletePrefix = async function(prefix){
+storage.List = async function(prefix){
+	var keys = [];
 	var token;
 	do{
 		var list = await client.send(new S3.ListObjectsV2Command({
 			Bucket: Bucket, Prefix: prefix, ContinuationToken: token
 		}));
-		var keys = (list.Contents || []).map(function(o){ return {Key: o.Key}; });
-		// One key at a time: some S3-compatible stores reject DeleteObjects without Content-MD5.
-		for(var i=0;i<keys.length;i++){
-			await storage.Delete(keys[i].Key);
-		}
+		(list.Contents || []).forEach(function(o){ keys.push(o.Key); });
 		token = list.IsTruncated ? list.NextContinuationToken : undefined;
 	} while(token);
+	return keys;
+};
+
+storage.DeletePrefix = async function(prefix){
+	// One key at a time: some S3-compatible stores reject DeleteObjects without Content-MD5.
+	var keys = await storage.List(prefix);
+	for(var i=0;i<keys.length;i++){
+		await storage.Delete(keys[i]);
+	}
 };
 
 storage.SignedUrl = function(key, expiresIn){

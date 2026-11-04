@@ -1,0 +1,1 @@
+{"identities":[{"name":"commutag","credentials":[{"accessKey":"commutag","secretKey":"commutag-dev-secret"}],"actions":["Admin","Read","Write","List","Tagging"]}]}

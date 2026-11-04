@@ -1,7 +1,9 @@
-.git
+node_modules
+dist
+log
 config.json
-*.log
-node_modules/
-log/
-static/file/
-static/upload/
+.git
+static/upload
+static/file
+python
+test

@@ -107,6 +107,9 @@ describe("照片儲存與打包下載", function(){
 	it("rejects paths outside the media layout", async function(){
 		var res = await chai.request(app).get("/media/dataset/"+datasets.pub._id+"/../../user/x.jpg").redirects(0);
 		expect(res.status).to.equal(404);
+		// database backups share the bucket and must never be served
+		var backup = await chai.request(app).get("/media/backup/mongo-2026.archive.gz").redirects(0);
+		expect(backup.status).to.equal(404);
 	});
 
 	it("refuses unknown download filters and formats", async function(){
