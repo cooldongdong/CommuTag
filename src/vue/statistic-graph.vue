@@ -66,7 +66,8 @@
 </template>
 
 <script>
-import Plotly from "plotly.js-basic-dist-min"
+// Plotly is loaded as a classic <script> on the statistic page (see view/statistic.ejs):
+// the d3 v3 bundled inside it reads `this.document` at top level, which is undefined in an ES module.
 import spacetime from "spacetime"
 
 import util from "../js/util.js"

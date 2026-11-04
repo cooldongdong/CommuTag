@@ -32,6 +32,13 @@ app.set("views", rootDir + "/view");
 app.locals.assets = require("./app/controller/assets.js")(Config.mode == "production");
 app.use('/static',express.static(rootDir + '/static'));
 app.use('/dist',express.static(rootDir + '/dist'));
+// Plotly must run as a classic script, so it is served from the locked npm package
+// instead of being bundled by Vite.
+var plotlyFile = require.resolve("plotly.js-basic-dist-min/plotly-basic.min.js");
+app.locals.plotlyVersion = require("plotly.js-basic-dist-min/package.json").version;
+app.get('/vendor/plotly-basic.min.js', function(req, res){
+	res.sendFile(plotlyFile, {maxAge: "30d"});
+});
 
 //setup auth
 var options = {

@@ -184,6 +184,7 @@ export default {
 			Vue.nextTick(function(){
 				this.uploader = null;
 				this.annotator = null;
+				if(!this.image) return;
 				var idArr = [];
 				var hasUploader = this.image.uploadFrom == "user" && this.image.uploader;
 				var hasAnnotator = this.image.annotation && this.image.annotation.user;
