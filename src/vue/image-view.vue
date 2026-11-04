@@ -60,7 +60,7 @@ export default {
 					var t = spacetime(this.image.dataTime).goto(tz);
 					this.image.time = t.unixFmt("yyyy-MM-dd HH:mm:ss");
 				}
-				this.image.url = "/static/upload/dataset/"+this.datasetID+"/image/"+this.imageID+".jpg";
+				this.image.url = "/media/dataset/"+this.datasetID+"/image/"+this.imageID+".jpg";
 			}.bind(this));
 		}.bind(this));
 	},

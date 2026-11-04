@@ -1,5 +1,0 @@
-pymongo
-pascal_voc_writer
-opencv-python-headless
-pytz
-lxml

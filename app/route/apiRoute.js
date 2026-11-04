@@ -4,6 +4,7 @@ var apiController = require("../controller/apiController");
 var util = require("../controller/util");
 var Config = require("../../config.json");
 var upload = require("../controller/upload");
+var datasetController = require("../controller/datasetController");
 
 module.exports = router;
 
@@ -46,38 +47,38 @@ router.get('/list-key', util.CheckAdmin, function(req, res){
 });
 
 router.post('/upload-image', upload.UploadImageToMem, function(req, res){
-	var param = {};
-	param.dataset = req.body.dataset;
-	param.lat = req.body.lat;
-	param.lng = req.body.lng;
-	param.remark = req.body.remark;
-	param.dataTime = req.body.dataTime;
-	if(req.body.formReply){
-		param.formReply = JSON.parse(req.body.formReply);
+	function Fail(err){
+		if(!err.err) console.log(err);
+		res.status(200).json({status: "fail", message: err.err || "upload image fail"});
 	}
-	param.apiKey = req.body.apiKey;
-
-	param.succFunc = function(result){
-		var imageParam = {};
-		imageParam.newPath = "/static/upload/dataset/"+req.body.dataset+"/image/";
-		imageParam.newName = result._id+".jpg";
-		imageParam.encode = "base64";
-		if(!req.body.uploadImage){
-			res.status(200).json({status: "fail", message: "no upload image"});
+	// Check the image before creating a record, so a bad upload leaves nothing behind.
+	upload.ReadImage(req).then(function(image){
+		var param = {};
+		param.dataset = req.body.dataset;
+		param.lat = req.body.lat;
+		param.lng = req.body.lng;
+		param.remark = req.body.remark;
+		param.dataTime = req.body.dataTime;
+		if(req.body.formReply){
+			try{
+				param.formReply = JSON.parse(req.body.formReply);
+			}
+			catch(err){
+				return Fail({err: "invalid formReply"});
+			}
 		}
-		imageParam.content = req.body.uploadImage.replace(/^data:image\/jpeg;base64,/, "");
-		imageParam.succFunc = function(result){
-			res.status(200).json({status: "ok", "data": result});
-		}
-		imageParam.failFunc = function(result){
-			res.status(200).json({status: "fail", message: result.err});
-		}
-		upload.SaveFile(imageParam);
-	};
-	param.failFunc = function(result){
-		res.status(200).json({status: "fail", message: result.err});
-	};
-	apiController.UploadImage(param);
+		param.apiKey = req.body.apiKey;
+		param.succFunc = function(result){
+			upload.SaveDatasetImage(req.body.dataset, result._id, image.buffer).then(function(){
+				res.status(200).json({status: "ok", "data": result});
+			}).catch(function(err){
+				datasetController.RemoveImageRecord(req.body.dataset, result._id);
+				Fail(err);
+			});
+		};
+		param.failFunc = Fail;
+		apiController.UploadImage(param);
+	}).catch(Fail);
 });
 
 router.post('/set-annotation', function(req, res){

@@ -75,7 +75,7 @@ export default {
 
 				for(var i=0;i<this.imageArr.length;i++){
 					var image =this.imageArr[i];
-					image.url = "/static/upload/dataset/"+param.id+"/image/"+image._id+".jpg";
+					image.url = "/media/dataset/"+param.id+"/image/"+image._id+".jpg";
 				}
 
 				this.InitTabContent();

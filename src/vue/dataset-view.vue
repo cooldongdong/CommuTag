@@ -247,7 +247,7 @@ export default {
 							var t = spacetime(image.dataTime).goto(tz);
 							image.time = t.unixFmt("yyyy-MM-dd HH:mm:ss");
 						}
-						image.url = "/static/upload/dataset/"+this.datasetID+"/image/"+image._id+".jpg";
+						image.url = "/media/dataset/"+this.datasetID+"/image/"+image._id+".jpg";
 						this.imageArr.push(image);
 					}
 					this.filterArr = this.imageArr;

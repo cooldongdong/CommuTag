@@ -4,6 +4,7 @@ var Dataset = require('../db/dataset');
 var Favorite = require('../db/favorite');
 var mongoose = require('mongoose');
 var ImageModel = require("../db/imageSchema").ImageModel;
+var exporter = require("./datasetExport");
 
 var datasetController = {};
 
@@ -448,17 +449,49 @@ datasetController.AddVerification = function(param){
 	});
 };
 
-// The old implementation shelled out to Python with request fields pasted into the
-// command line (command injection). It is rebuilt in Node in a later change.
+// Validates the request and returns the link that streams the zip. The old version
+// shelled out to Python with these fields pasted into the command (command injection);
+// now they are checked against fixed lists and never reach a shell.
+async function CheckDownload(param){
+	var dataset = await CheckDatasetAuth({
+		dataset: param.dataset,
+		user: param.user,
+		checkView: true,
+		checkDownload: true,
+	});
+	if(!exporter.FILTERS.includes(param.filter)) throw {err:"invalid filter"};
+	if(exporter.FORMATS[dataset.annotationType] != param.format) throw {err:"invalid format"};
+	return dataset;
+}
+
 datasetController.BatchDownload = function(param){
 	Run(param, async function(){
-		await CheckDatasetAuth({
-			dataset: param.dataset,
-			user: param.user,
-			checkDownload: true,
-		});
-		throw {err:"batch download temporarily unavailable"};
+		await CheckDownload(param);
+		return "/dataset/download-zip?"+new URLSearchParams({
+			dataset: param.dataset, filter: param.filter, format: param.format
+		}).toString();
 	});
+};
+
+datasetController.StreamZip = function(param){
+	var res = param.res;
+	(async function(){
+		var dataset = await CheckDownload(param);
+		var images = await ImageModel(param.dataset).find({}).sort({createdAt: 1});
+		images = exporter.FilterImages(images.map(function(d){ return d.toJSON(); }), param.filter);
+		await exporter.StreamZip(dataset, images, param.format, res);
+	})().catch(function(err){
+		if(!err || !err.err) console.log(err);
+		if(res.headersSent) return res.destroy();
+		res.status(403).json({status: "fail", message: (err && err.err) || "download fail"});
+	});
+};
+
+// Used when storing the photo fails right after its record was created.
+datasetController.RemoveImageRecord = function(dataset, image){
+	ImageModel(dataset).deleteOne({_id: image}).then(function(){
+		RefreshStatistic(dataset);
+	}).catch(function(err){ console.log(err); });
 };
 
 module.exports = datasetController;

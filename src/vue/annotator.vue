@@ -78,7 +78,7 @@ export default {
 				if(result.status != "ok") return;
 				for(var i=0;i<result.data.length;i++){
 					var image = result.data[i];
-					image.url = "/static/upload/dataset/"+this.datasetSelect._id+"/image/"+image._id+".jpg";
+					image.url = "/media/dataset/"+this.datasetSelect._id+"/image/"+image._id+".jpg";
 				}
 				this.imageArr = result.data;
 				this.GenerateTask();

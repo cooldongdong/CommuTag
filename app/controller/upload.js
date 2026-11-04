@@ -1,111 +1,96 @@
-var fs   = require("fs-extra");
 var multer = require("multer");
 var sharp = require("sharp");
-var rimraf = require("rimraf");
+var storage = require("./storage");
 
 var upload = {};
 
-var storage = multer.memoryStorage()
-
 var fileFilter = function(req, file, cb){
 	var allowArr = ["image/jpeg","image/png","image/gif"];
-	if(allowArr.includes(file.mimetype)) {
-		cb(null, true);
-	}
-	else {
-		cb(null, false);
-	}
+	cb(null, allowArr.includes(file.mimetype));
 };
 
 upload.UploadImageToMem = multer({
-	storage: storage,
+	storage: multer.memoryStorage(),
 	limits: {
 		fileSize: 1024 * 1024 * 10
 	},
 	fileFilter: fileFilter
 }).single("uploadImage");
 
-upload.GetImageType = function(file){
-	switch(file.mimetype){
-		case "image/jpeg":
-			return "jpg";
-			break;
-		case "image/png":
-			return "png";
-			break;
-		case "image/gif":
-			return "gif";
-			break;
-		default:
-			return "";
-	}
-}
+var MAX_SIDE = 4096;
 
-//param: buffer, newPath, newName, thumb {name, w, h}, succFunc, failFunc
-upload.SaveImage = function(param){
-	var dir = __dirname+"/../..";
-	if (!fs.existsSync(dir+param.newPath)){
-		fs.mkdirpSync(dir+param.newPath);
+// Reads the uploaded image from a multipart file or the base64 data URL the web
+// client sends, and checks that it really is an image before anything is stored.
+// JPEGs within the size limit are kept byte for byte; anything else is converted
+// to JPEG, because every stored photo is served as .jpg.
+upload.ReadImage = async function(req){
+	var buffer = null;
+	if(req.file && req.file.buffer){
+		buffer = req.file.buffer;
 	}
-	var image = sharp(param.buffer);
-	var newName = param.newPath+param.newName;
-	var thumbName = param.thumb?param.newPath+param.thumb.name:"";
-	//resize if original size exceed limit
-	var limitW = 1024;
-	var limitH = 1024;
-	image.metadata().then(function(meta){
-		var scaleW = limitW/meta.width;
-		var scaleH = limitH/meta.height;
-		var s = Math.min(scaleW,scaleH);
-		if(s>1) return image;
-		else return image.resize(parseInt(meta.width*s),parseInt(meta.height*s));
-	}).then(function(resizeImage){
-		//save image & its thumbnail into disk
-		resizeImage.toFile(dir+newName)
-		.then(function(info){
-			//console.log(info);
-			if(param.thumb){
-				resizeImage.resize({
-					width:param.thumb.w,
-					height:param.thumb.h,
-					fit:sharp.fit.cover,
-					position:sharp.strategy.entropy
-				})
-				.toFile(dir+thumbName)
-				.then(function(info){
-					param.succFunc({newName: newName, thumbName: thumbName});
-				}).catch(function(err){
-					console.log(err);
-					param.failFunc({err:"save thumbnail fail"});
-				});
-			}
-			else param.succFunc({newName: newName});
-		});
-	}).catch(function(err){
-		console.log(err);
-		param.failFunc({err:"save image fail"});
-	});
+	else if(typeof req.body.uploadImage == "string"){
+		var data = req.body.uploadImage.replace(/^data:image\/[a-z]+;base64,/, "");
+		buffer = Buffer.from(data, "base64");
+	}
+	if(!buffer || buffer.length == 0) throw {err: "no upload image"};
 
+	var meta;
+	try{
+		meta = await sharp(buffer).metadata();
+	}
+	catch(err){
+		throw {err: "invalid image"};
+	}
+	var tooBig = meta.width > MAX_SIDE || meta.height > MAX_SIDE;
+	if(meta.format == "jpeg" && !tooBig){
+		return {buffer: buffer, width: meta.width, height: meta.height};
+	}
+	var out = await sharp(buffer).rotate()
+		.resize({width: MAX_SIDE, height: MAX_SIDE, fit: "inside", withoutEnlargement: true})
+		.jpeg({quality: 90})
+		.toBuffer({resolveWithObject: true});
+	return {buffer: out.data, width: out.info.width, height: out.info.height};
 };
 
-//param: saveName, content, succFunc, failFunc
-upload.SaveFile = function(param){
-	var dir = __dirname+"/../..";
-	if (!fs.existsSync(dir+param.newPath)){
-		fs.mkdirpSync(dir+param.newPath);
-	}
-	var newName = param.newPath+param.newName;
-	fs.writeFile(dir+newName, param.content, param.encode||"utf8", function(err) {
-		if(err){
-			console.log(err);
-			param.failFunc({err:"save file fail"});
-		}
-		else param.succFunc({newName:newName});
-	}); 
+upload.DatasetImageKey = function(dataset, image){
+	return "dataset/"+dataset+"/image/"+image+".jpg";
 };
 
-upload.DeletePath = function(path, callback) {
-	rimraf(path,callback);
-}
+upload.SaveDatasetImage = function(dataset, image, buffer){
+	return storage.Put(upload.DatasetImageKey(dataset, image), buffer);
+};
+
+upload.SaveDatasetCover = async function(dataset, buffer){
+	var key = "dataset/"+dataset+"/cover.jpg";
+	await storage.Put(key, buffer);
+	return storage.MediaPath(key);
+};
+
+// User photo is capped at 1024px; the icon is a 64px square crop.
+upload.SaveUserPhoto = async function(user, buffer){
+	var photoKey = "user/"+user+"/photo.jpg";
+	var iconKey = "user/"+user+"/icon.jpg";
+	var photo = await sharp(buffer).rotate()
+		.resize({width: 1024, height: 1024, fit: "inside", withoutEnlargement: true})
+		.jpeg({quality: 90}).toBuffer();
+	var icon = await sharp(buffer).rotate()
+		.resize({width: 64, height: 64, fit: sharp.fit.cover, position: sharp.strategy.entropy})
+		.jpeg({quality: 90}).toBuffer();
+	await storage.Put(photoKey, photo);
+	await storage.Put(iconKey, icon);
+	return {photo: storage.MediaPath(photoKey), icon: storage.MediaPath(iconKey)};
+};
+
+upload.DeleteDatasetImage = function(dataset, image){
+	return storage.Delete(upload.DatasetImageKey(dataset, image));
+};
+
+upload.DeleteDataset = function(dataset){
+	return storage.DeletePrefix("dataset/"+dataset+"/");
+};
+
+upload.DeleteUser = function(user){
+	return storage.DeletePrefix("user/"+user+"/");
+};
 
 module.exports = upload;

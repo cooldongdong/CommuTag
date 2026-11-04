@@ -172,7 +172,7 @@ export default {
 					var t = spacetime(this.editImage.dataTime).goto(tz);
 					this.editImage.time = t.unixFmt("yyyy-MM-dd HH:mm:ss");
 				}
-				this.editImage.url = "/static/upload/dataset/"+this.dataset._id+"/image/"+this.image._id+".jpg";
+				this.editImage.url = "/media/dataset/"+this.dataset._id+"/image/"+this.image._id+".jpg";
 				this.openInfoEdit = true;
 			}.bind(this));
 		},

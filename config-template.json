@@ -1,13 +1,13 @@
 {
 	"mode": "development or production",
-	"mongodb":{
+	"mongodb": {
 		"url": "mongodb://localhost:27017/commutag"
 	},
 	"facebookAuth": {
 		"enable": true,
 		"clientID": "YOUR_FACEBOOK_CLIENT_ID",
-		"clientSecret" : "YOUR_FACEBOOK_CLIENT_SECRET",
-		"callbackURL" : "YOUR_FACEBOOK_LOGIN_CALLBACK"
+		"clientSecret": "YOUR_FACEBOOK_CLIENT_SECRET",
+		"callbackURL": "YOUR_FACEBOOK_LOGIN_CALLBACK"
 	},
 	"googleAuth": {
 		"enable": true,
@@ -15,16 +15,16 @@
 		"clientSecret": "YOUR_GOOGLE_CLIENT_SECRET",
 		"callbackURL": "YOUR_GOOGLE_LOGIN_CALLBACK"
 	},
-	"elasticEmail":{
+	"elasticEmail": {
 		"enable": true,
-		"apiKey":"YOUR_ELASTIC_EMAIL_API_KEY",
-		"sender":"YOUR_ELASTIC_EMAIL_SENDER",
-		"url":"https://api.elasticemail.com/v2/email/send"
+		"apiKey": "YOUR_ELASTIC_EMAIL_API_KEY",
+		"sender": "YOUR_ELASTIC_EMAIL_SENDER",
+		"url": "https://api.elasticemail.com/v2/email/send"
 	},
-	"session":{
+	"session": {
 		"secret": "YOUR_SESSION_SECRET"
 	},
-	"jwt":{
+	"jwt": {
 		"secret": "YOUR_JWT_SECRET"
 	},
 	"hostname": "http://localhost",
@@ -37,12 +37,20 @@
 		"provider": "google or facebook or local",
 		"email": "YOUR_ADMIN_EMAIL"
 	},
-	"verify":{
+	"verify": {
 		"sample": 10,
 		"accept": 0.9,
 		"reject": 0.7
 	},
-	"googleAnalytics":{
+	"googleAnalytics": {
 		"id": "YOUR_GOOGLE_ANALYTICS_ID"
+	},
+	"storage": {
+		"endpoint": "https://<account-id>.r2.cloudflarestorage.com",
+		"region": "auto",
+		"bucket": "commutag",
+		"accessKeyId": "",
+		"secretAccessKey": "",
+		"forcePathStyle": false
 	}
 }

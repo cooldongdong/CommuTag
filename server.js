@@ -17,6 +17,7 @@ var UserRoute = require("./app/route/userRoute.js");
 var DatasetRoute = require("./app/route/datasetRoute.js");
 var FavoriteRoute = require("./app/route/favoriteRoute.js");
 var ApiRoute = require("./app/route/apiRoute.js");
+var MediaRoute = require("./app/route/mediaRoute.js");
 
 mongoose.connect(Config.mongodb.url);
 mongoose.pluralize(null);
@@ -73,6 +74,7 @@ app.use("/user", UserRoute);
 app.use("/dataset", DatasetRoute);
 app.use("/favorite", FavoriteRoute);
 app.use("/api", ApiRoute);
+app.use("/media", MediaRoute);
 
 
 app.listen(app.port);

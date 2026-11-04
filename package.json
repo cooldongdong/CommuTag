@@ -9,6 +9,9 @@
     "test": "mocha --exit --recursive"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1161.0",
+    "@aws-sdk/s3-request-presigner": "^3.1161.0",
+    "archiver": "^7.0.1",
     "async": "^3.2.2",
     "bcryptjs": "^2.4.3",
     "connect-mongodb-session": "^5.0.0",
@@ -46,6 +49,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue2": "^2.3.4",
+    "adm-zip": "^0.5.18",
     "chai": "^4.2.0",
     "chai-http": "^4.4.0",
     "cheerio": "^1.0.0-rc.12",

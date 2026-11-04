@@ -45,9 +45,8 @@ router.post('/delete-dataset', util.CheckAdmin,util.CSRF, function(req, res){
 	var param = {};
 	param.id = req.body.id;
 	param.succFunc = function(result){
-		upload.DeletePath("static/upload/dataset/"+param.id+"/", function(){
-			res.status(200).json({"status":"ok","data": result});
-		});
+		upload.DeleteDataset(param.id).catch(function(err){ console.log(err); });
+		res.status(200).json({"status":"ok","data": result});
 	};
 	param.failFunc = function(result){
 		res.status(200).json({"status": "fail","message": result.err});
@@ -114,61 +113,58 @@ router.get('/view-image', function(req, res) {
 });
 
 router.post('/change-cover',util.CSRF, upload.UploadImageToMem,util.CheckMaster, function(req, res){	
-	var param = {};
-	param.id = req.body.dataset;
-	var newPath = "/static/upload/dataset/"+req.body.dataset+"/";
-	var newName = "cover.jpg";
-	param.picCover = newPath+newName;
-	param.succFunc = function(result){
-		var imageParam = {};
-		imageParam.newPath = newPath;
-		imageParam.newName = newName;
-		imageParam.encode = "base64";
-		imageParam.content = req.body.uploadImage.replace(/^data:image\/jpeg;base64,/, "");
-		imageParam.succFunc = function(uploadResult){
-			res.status(200).json({status: "ok", "data": result});
-		};
-		imageParam.failFunc = function(result){
-			res.status(200).json({status: "fail", message: result.err});
-		};
-		upload.SaveFile(imageParam);
-	}
-	param.failFunc = function(result){
-		res.status(200).json({status: "fail", message: result.err});
-	}
-	datasetController.ChangeCover(param);
-
+	(async function(){
+		var image = await upload.ReadImage(req);
+		var picCover = await upload.SaveDatasetCover(req.body.dataset, image.buffer);
+		datasetController.ChangeCover({
+			id: req.body.dataset,
+			picCover: picCover,
+			succFunc: function(result){
+				res.status(200).json({status: "ok", "data": result});
+			},
+			failFunc: function(result){
+				res.status(200).json({status: "fail", message: result.err});
+			}
+		});
+	})().catch(function(err){
+		if(!err.err) console.log(err);
+		res.status(200).json({status: "fail", message: err.err || "change cover fail"});
+	});
 });
 
-router.post('/upload-image',util.CheckLogin,util.CheckBlacklist,util.CSRF, upload.UploadImageToMem, function(req, res){	
-	var param = {};
-	param.user = req.user;
-	param.dataset = req.body.dataset;
-	param.lat = req.body.lat;
-	param.lng = req.body.lng;
-	param.remark = req.body.remark;
-	param.dataTime = req.body.dataTime;
-	if(req.body.formReply){
-		param.formReply = JSON.parse(req.body.formReply);
+router.post('/upload-image',util.CheckLogin,util.CheckBlacklist,util.CSRF, upload.UploadImageToMem, function(req, res){
+	function Fail(err){
+		if(!err.err) console.log(err);
+		res.status(200).json({status: "fail", message: err.err || "upload image fail"});
 	}
-	param.succFunc = function(result){
-		var imageParam = {};
-		imageParam.newPath = "/static/upload/dataset/"+req.body.dataset+"/image/";
-		imageParam.newName = result._id+".jpg";
-		imageParam.encode = "base64";
-		imageParam.content = req.body.uploadImage.replace(/^data:image\/jpeg;base64,/, "");
-		imageParam.succFunc = function(result){
-			res.status(200).json({status: "ok", "data": result});
+	upload.ReadImage(req).then(function(image){
+		var param = {};
+		param.user = req.user;
+		param.dataset = req.body.dataset;
+		param.lat = req.body.lat;
+		param.lng = req.body.lng;
+		param.remark = req.body.remark;
+		param.dataTime = req.body.dataTime;
+		if(req.body.formReply){
+			try{
+				param.formReply = JSON.parse(req.body.formReply);
+			}
+			catch(err){
+				return Fail({err: "invalid formReply"});
+			}
 		}
-		imageParam.failFunc = function(result){
-			res.status(200).json({status: "fail", message: result.err});
-		}
-		upload.SaveFile(imageParam);
-	};
-	param.failFunc = function(result){
-		res.status(200).json({status: "fail", message: result.err});
-	};
-	datasetController.UploadImage(param);
+		param.succFunc = function(result){
+			upload.SaveDatasetImage(req.body.dataset, result._id, image.buffer).then(function(){
+				res.status(200).json({status: "ok", "data": result});
+			}).catch(function(err){
+				// Do not leave a record that points at a missing photo.
+				datasetController.RemoveImageRecord(req.body.dataset, result._id);
+				Fail(err);
+			});
+		};
+		param.failFunc = Fail;
+		datasetController.UploadImage(param);
+	}).catch(Fail);
 });
 
 router.get('/list-image', function(req, res) {
@@ -211,9 +207,8 @@ router.post('/delete-image', util.CheckImageEdit, util.CSRF, function(req, res) 
 	param.dataset = req.body.dataset;
 	param.image = req.body.image;
 	param.succFunc = function(result){
-		upload.DeletePath("static/upload/dataset/"+param.dataset+"/image/"+param.image+".jpg", function(){
-			res.status(200).json({"status":"ok","data": result});
-		});
+		upload.DeleteDatasetImage(param.dataset, param.image).catch(function(err){ console.log(err); });
+		res.status(200).json({"status":"ok","data": result});
 	};
 	param.failFunc = function(result){
 		res.status(200).json({"status": "fail","message": result.err});
@@ -281,4 +276,14 @@ router.post('/batch-download',util.CheckLogin,util.CheckBlacklist,util.CSRF, fun
 		res.status(200).json({"status": "fail","message": result.err});
 	};
 	datasetController.BatchDownload(param);
+});
+
+router.get('/download-zip',util.CheckLogin,util.CheckBlacklist, function(req, res){
+	datasetController.StreamZip({
+		user: req.user,
+		dataset: req.query.dataset,
+		filter: req.query.filter,
+		format: req.query.format,
+		res: res
+	});
 });
