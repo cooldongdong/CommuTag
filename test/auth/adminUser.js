@@ -176,6 +176,17 @@ describe("管理員權限測試", function() {
 		}); 
 	});
 
+	it("list user shows emails to admins", function(done){ 
+		agent.get("/user/list-user")
+		.set("x-requested-with","XMLHttpRequest")
+		.end(function(err,res){
+			var result = JSON.parse(res.text);
+			expect(result.data.user.length).to.be.above(0);
+			expect(result.data.user[0]).to.have.property("signupEmail");
+			done(); 
+		}); 
+	});
+
 	it("list name", function(done){ 
 		agent.get("/user/list-name")
 		.set("x-requested-with","XMLHttpRequest")

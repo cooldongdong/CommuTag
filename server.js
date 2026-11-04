@@ -24,6 +24,7 @@ mongoose.pluralize(null);
 //setup view & static file
 var rootDir = __dirname;
 var app = express();
+if(Config.mode == "production") app.set('trust proxy', 1);	// behind Cloudflare / reverse proxy, so secure cookies work
 app.port = Config.serverPort || 8001;
 app.set('view engine', 'ejs');
 app.set("views", rootDir + "/view");
@@ -49,8 +50,14 @@ app.use(session({
     secret: Config.session.secret,
     store: sessionStore,
     resave: true,
-    saveUninitialized: true,
-    cookie: { path: '/', httpOnly: true,maxAge: 1000*60*60*24*100}	//session保留100天
+    saveUninitialized: false,
+    cookie: {
+        path: '/',
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: Config.mode == "production",	// production runs behind HTTPS
+        maxAge: 1000*60*60*24*30	//session保留30天
+    }
 }));
 
 app.use(bodyParser.urlencoded({extended: true,limit: '5mb'}));

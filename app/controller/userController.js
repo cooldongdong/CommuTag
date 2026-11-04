@@ -35,27 +35,40 @@ userController.ChangeUserPhoto = function(param){
 };
 
 userController.ListUser = function(param){
+	// Any logged-in user can search users (dataset masters pick members this way),
+	// but only admins may see emails or list every account. Others search by name,
+	// an exact email, or a user id, and get public fields back.
 	var query = {};
+	var or = [];
 	if(param.keyword){
 		var keyword = util.EscapeRegex(param.keyword);
-		query["$or"] = [
-			{"name":{$regex: keyword}},
-			{"contactEmail":{$regex: keyword}},
-		];
-		if(mongoose.Types.ObjectId.isValid(param.keyword)){
-			query["$or"].push({"_id":new mongoose.Types.ObjectId(param.keyword)});
+		or.push({"name":{$regex: keyword}});
+		if(param.isAdmin){
+			or.push({"contactEmail":{$regex: keyword}});
 		}
+		else{
+			or.push({"contactEmail":String(param.keyword)});
+			or.push({"signupEmail":String(param.keyword)});
+		}
+		if(mongoose.Types.ObjectId.isValid(param.keyword)){
+			or.push({"_id":new mongoose.Types.ObjectId(param.keyword)});
+		}
+		query["$or"] = or;
 	}
-	if(param.authType){
+	else if(!param.isAdmin){
+		return param.succFunc({hasMore: false, user: []});
+	}
+	if(param.isAdmin && param.authType){
 		query.authType = param.authType;
 	}
-	if(param.status){
+	if(param.isAdmin && param.status){
 		query.status = param.status;
 	}
+	var projection = param.isAdmin ? {"__v":0,"password":0,"oauthID":0} : {"name":1,"icon":1,"photo":1};
 	var limit = 8;
 	var skip = (param.page||0)*limit;
 	Run(param, async function(){
-		var user = await User.find(query,{"__v":0,"password":0,"oauthID":0},{limit:limit+1, skip:skip});
+		var user = await User.find(query,projection,{limit:limit+1, skip:skip});
 		if(user.length > limit){
 			return {hasMore: true, user: user.slice(0,-1)};
 		}

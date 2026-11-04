@@ -166,6 +166,30 @@ describe("一般使用者權限測試", function() {
 		}); 
 	});
 
+	it("list user hides emails from non-admins", function(done){ 
+		agent.get("/user/list-user")
+		.set("x-requested-with","XMLHttpRequest")
+		.query({keyword:"normalUser@test.com"})
+		.end(function(err,res){
+			var result = JSON.parse(res.text);
+			expect(result.status).to.equal("ok");
+			expect(result.data.user.length).to.equal(1);
+			expect(result.data.user[0]).to.not.have.property("contactEmail");
+			expect(result.data.user[0]).to.not.have.property("signupEmail");
+			done(); 
+		}); 
+	});
+
+	it("list user without keyword returns nobody for non-admins", function(done){ 
+		agent.get("/user/list-user")
+		.set("x-requested-with","XMLHttpRequest")
+		.end(function(err,res){
+			var result = JSON.parse(res.text);
+			expect(result.data.user.length).to.equal(0);
+			done(); 
+		}); 
+	});
+
 	it("list name", function(done){ 
 		agent.get("/user/list-name")
 		.set("x-requested-with","XMLHttpRequest")

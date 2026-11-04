@@ -21,6 +21,7 @@ router.get('/list-user', util.CheckLogin, function(req, res) {
 	param.authType = req.query.authType;
 	param.status = req.query.status;
 	param.page = req.query.page;
+	param.isAdmin = req.user.authType == "admin";
 	param.succFunc = function(result){
 		res.status(200).json({"status":"ok","data": result});
 	};

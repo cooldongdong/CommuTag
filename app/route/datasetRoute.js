@@ -24,7 +24,14 @@ router.post('/create-dataset', util.CheckAdmin,util.CSRF, function(req, res){
 
 router.post('/update-dataset', util.CheckMaster,util.CSRF, function(req, res){
 	var param = {};
-	param.info = req.body.info;
+	// CheckMaster authorized req.body.dataset, so that is the only dataset this request
+	// may change. info._id used to decide the target, letting a master of one dataset
+	// edit another. Counters are maintained by the server, not the client.
+	var info = Object.assign({}, req.body.info || {});
+	["_id","picNum","annotationNum","createdAt","updatedAt"].forEach(function(k){ delete info[k]; });
+	info._id = req.body.dataset;
+	if(!info._id) return res.status(200).json({"status": "fail","message": "no dataset"});
+	param.info = info;
 	param.succFunc = function(result){
 		res.status(200).json({"status":"ok","data": result});
 	};

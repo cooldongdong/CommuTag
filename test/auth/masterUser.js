@@ -82,6 +82,13 @@ describe("版主權限測試", function() {
 				});
 			},
 			function(next){
+				cb(Dataset.create({name:"notMaster", desc:"notMaster"}), function(err,result){
+					if(err) console.log(err);
+					dataset.notMaster = result;
+					next();
+				});
+			},
+			function(next){
 				datasetAdd.allOff.master = [user.master];
 				cb(Dataset.create(datasetAdd.allOff), function(err,result){
 					if(err) console.log(err);
@@ -282,13 +289,30 @@ describe("版主權限測試", function() {
 		}); 
 	});
 
+	it("update other dataset through info._id", function(done){ 
+		agent.post("/dataset/update-dataset")
+		.set("x-requested-with","XMLHttpRequest")
+		.set("csrf-token",csrfToken)
+		.send({
+			dataset:dataset.allOn._id.toString(),
+			info:{_id:dataset.notMaster._id.toString(), name:"hijacked", master:[user.master]}
+		})
+		.end(function(err,res){
+			expect(res.statusCode).to.equal(200);
+			cb(Dataset.findOne({_id:dataset.notMaster._id}), function(err, d){
+				expect(d.name).to.not.equal("hijacked");
+				done();
+			});
+		}); 
+	});
+
 	it("update dataset", function(done){ 
 		agent.post("/dataset/update-dataset")
 		.set("x-requested-with","XMLHttpRequest")
 		.set("csrf-token",csrfToken)
 		.send({
 			dataset:dataset.allOn._id.toString(),
-			info:{}
+			info:{master:[user.master]}
 		})
 		.end(function(err,res){
 			expect(res.statusCode).to.equal(200);

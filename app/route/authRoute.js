@@ -50,7 +50,7 @@ router.post('/forget-password', auth.ForgetPassword);
 
 router.post('/reset-password', auth.ResetPassword);
 
-router.post('/change-password', auth.ChangePassword);
+router.post('/change-password', util.CheckLogin, util.CSRF, auth.ChangePassword);
 
 router.get('/logout', function(req, res) {
 	req.logout(function(err) {
