@@ -72,30 +72,45 @@ POST資料包括下列欄位:
 - 使用時將 **batchUpload.py** 中的參數跟資料夾位置修改之後執行，即可上傳資料集與標註 (程式內有各參數說明的註解)。
 
 ## 安裝架設
-### 程式架構：
-- 前端: vue.js + quasar.js
-- 後端: nodejs + express
-- 資料庫: mongodb
-- 編譯工具: webpack
-- 資料集打包處理: python3
+### 程式架構
+- 前端：Vue 2.7 + Quasar 1，用 Vite 打包（`npm run build` 產生 `dist/`）
+- 後端：Node.js 22 + Express 4
+- 資料庫：MongoDB 7（Mongoose 8）。所有照片的資料存在同一個 `image` collection，位置存成 GeoJSON 並建 2dsphere 索引
+- 照片儲存：相容 S3 的物件儲存。正式環境用 Cloudflare R2，開發時用本機的 S3 替身
+- 照片網址一律是 `/media/...`：伺服器先檢查權限（私有資料集只有成員看得到），再轉到有效期 10 分鐘的簽名網址。bucket 本身不公開
+- 打包下載：由 Node 直接從儲存空間串流產生 zip，伺服器不需要 Python
 
-### 一般安裝(ubuntu)
-- [安裝nodejs](https://tecadmin.net/install-latest-nodejs-npm-on-ubuntu/)
-- [安裝mongodb](https://docs.mongodb.com/manual/tutorial/install-mongodb-on-ubuntu/)
-- 下載本專案程式 git clone https://github.com/aga3134/CommuTag.git
-- 進入CommuTag資料夾，將config-template.json複製為config.json並修改裡面的資料(細節見下方config設定)
-- 安裝node函式庫 npm install
-- 安裝python函式庫 pip install -r requirements.txt
-- 執行程式 node server.js
-- 開啟瀏覽器網址 http://localhost:8001 (port可在config檔設定) 即可看到網站
+### 正式環境（Docker）
+1. 安裝 Docker 與 Docker Compose
+2. `git clone` 本專案，把 `config-template.json` 複製成 `config.json` 並填好（見下方 config 設定）。`mode` 設為 `production`
+3. 在 Cloudflare R2 建一個 bucket（保持私有），並建立有該 bucket 讀寫權限的 API token，填進 `config.json` 的 `storage`
+4. `docker compose up -d --build`
+5. 網站只在本機 `127.0.0.1:8001` 開放，前面要接反向代理或 Cloudflare Tunnel 提供 HTTPS。正式模式的登入 cookie 只在 HTTPS 下有效
+6. 設定每日備份（見下方「資料庫備份」）
 
-### 使用docker
-- [安裝docker](https://phoenixnap.com/kb/how-to-install-docker-on-ubuntu-18-04)
-- [安裝docker-compose](https://linuxize.com/post/how-to-install-and-use-docker-compose-on-ubuntu-18-04/)
-- 下載本專案程式 git clone https://github.com/aga3134/CommuTag.git
-- 進入CommuTag資料夾，將config-template.json複製為config.json並修改裡面的資料(細節見下方config設定)
-- 開啟服務 sudo docker-compose up
-- 開啟瀏覽器網址 http://localhost:8001 (port可在config檔設定) 即可看到網站
+MongoDB 沒有對外開放 port，只有網站程式連得到。
+
+### 資料庫備份
+`scripts/backup-mongo.sh` 會把資料庫 dump 後存進同一個 bucket 的 `backup/` 底下，預設保留最新 30 份（環境變數 `BACKUP_KEEP` 可改）。`/media` 不會提供 `backup/` 底下的檔案。
+
+```
+# crontab：每天 03:15 備份
+15 3 * * * cd /srv/commutag && ./scripts/backup-mongo.sh >> log/backup.log 2>&1
+```
+
+還原：從 bucket 下載 `backup/mongo-<時間>.archive.gz`，然後
+`docker compose exec -T mongo mongorestore --archive --gzip --drop < mongo-<時間>.archive.gz`
+
+照片本身存在 R2，不在這份備份裡。
+
+### 本機開發
+1. `docker compose -f docker-compose.dev.yml up -d`（啟動 MongoDB 與 S3 替身）
+2. 複製 `config-template.json` 成 `config.json`，`mode` 設 `development`，並照 `docker-compose.dev.yml` 開頭的註解填 `mongodb.url` 與 `storage`
+3. `npm install`
+4. `npm run build-watch`（前端）與 `npm run start-watch`（後端），開啟 http://localhost:8001
+
+### 測試
+需要上面的開發用 MongoDB 與 S3 替身。先 `npm run build`（頁面測試會讀 Vite 的 manifest），再 `npm test`。
 
 ## config設定
 **config中含有機密資訊，請勿將其對外公開。**
@@ -105,8 +120,8 @@ POST資料包括下列欄位:
 
 - mongodb: mongodb連線資訊
     - url: mongodb連線位置。
-        - 一般安裝請設為 mongodb://localhost:27017/commutag
-        - docker安裝請設為 mongodb://mongo:27017/commutag
+        - 用 docker-compose.yml 部署時請設為 mongodb://mongo:27017/commutag
+        - 本機開發請設為 mongodb://127.0.0.1:27019/commutag
         
 - facebookAuth: 以facebook帳號登入的功能設定，要使用需先[取得facebook開發者金鑰](https://www.techcoke.com/2014/05/register-facebook-application-api-key-app-id.html)
     - enable: 若不使用facebook登入功能可設為false關閉，反之設true
@@ -120,12 +135,18 @@ POST資料包括下列欄位:
     - clientSecret: 你申請取得的應用程式密鑰
     - callbackURL: 使用者登入成功後返回的網址，需設定為 {{你的伺服器網址}}/auth/google/callback
     
-- elasticEmail: 自動寄信功能設定，本專案使用[elasticEmail服務](https://elasticemail.com/email-api)，請先申請帳號並取得API金鑰，若要串接其他email服務請修改 app/controller/emailer.js裡面的程式
-    - enable: 若不使用自動寄信功能可設為false關閉，反之設true。本專案只在使用者註冊時與重設密碼時使用自動寄信功能
-    - apiKey: 你申請取得的api金鑰
-    - sender: 寄信時寄件人顯示的email
-    - url: 寄信api網址，若使用elasticEmail api 請設為 https://api.elasticemail.com/v2/email/send
-    
+- email: 寄信設定（註冊確認信、忘記密碼信），走 SMTP，任何寄信服務都可以用
+    - enable: 不寄信時設為 false
+    - sender: 寄件人 email
+    - smtp: host、port、secure（465 用 true，587 用 false）、user、pass
+
+- storage: 照片的物件儲存（相容 S3）
+    - endpoint: R2 為 `https://<帳號 ID>.r2.cloudflarestorage.com`；本機開發見 `docker-compose.dev.yml`
+    - region: R2 填 `auto`
+    - bucket: bucket 名稱（請保持私有）
+    - accessKeyId、secretAccessKey: 有該 bucket 讀寫權限的 API token
+    - forcePathStyle: R2 填 false；本機的 S3 替身填 true
+
 - session: 用來記住使用者的登入資訊
     - secret: session加密金鑰，可隨意輸入字串
     
