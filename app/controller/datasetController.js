@@ -98,12 +98,7 @@ datasetController.DeleteDataset = function(param){
 			console.log(err);
 			throw {err:"delete dataset fail"};
 		}
-		//delete related image collection
-		var name = "image"+param.id;
-		var found = await mongoose.connection.db.listCollections({name: name}).toArray();
-		if(found.length > 0){
-			await mongoose.connection.db.dropCollection(name);
-		}
+		await ImageModel(param.id).deleteMany({});
 		return {_id:param.id};
 	});
 };

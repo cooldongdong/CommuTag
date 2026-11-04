@@ -10,7 +10,7 @@ var bcrypt = require('bcryptjs');
 var async = require("async");
 var rimraf = require("rimraf");
 var cheerio = require('cheerio');
-var ImageSchema = require("../../app/db/imageSchema");
+var ImageModel = require("../../app/db/imageSchema").ImageModel;
 
 // Mongoose 7+ dropped callbacks; adapt a promise to the (err, result) callbacks used below.
 function cb(promise, fn){ promise.then(function(r){ fn(null, r); }, function(e){ fn(e); }); }
@@ -97,7 +97,7 @@ describe("版主權限測試", function() {
 				});
 			},
 			function(next){
-				var Image = mongoose.model("image"+dataset.allOn._id.toString(), ImageSchema);
+				var Image = ImageModel(dataset.allOn._id.toString());
 				cb(Image.create({}), function(err, result){
 					if(err) console.log(err);
 					image.allOn = result;
@@ -105,7 +105,7 @@ describe("版主權限測試", function() {
 				});
 			},
 			function(next){
-				var Image = mongoose.model("image"+dataset.allOff._id.toString(), ImageSchema);
+				var Image = ImageModel(dataset.allOff._id.toString());
 				cb(Image.create({}), function(err, result){
 					if(err) console.log(err);
 					image.allOff = result;
@@ -113,7 +113,7 @@ describe("版主權限測試", function() {
 				});
 			},
 			function(next){
-				var Image = mongoose.model("image"+dataset.allOn._id.toString(), ImageSchema);
+				var Image = ImageModel(dataset.allOn._id.toString());
 				cb(Image.create({annotation:{user:{_id:"123"}, annotation:[]}}), function(err, result){
 					if(err) console.log(err);
 					image.hasAnnotation = result;
@@ -121,7 +121,7 @@ describe("版主權限測試", function() {
 				});
 			},
 			function(next){
-				var Image = mongoose.model("image"+dataset.allOn._id.toString(), ImageSchema);
+				var Image = ImageModel(dataset.allOn._id.toString());
 				cb(Image.create({}), function(err, result){
 					if(err) console.log(err);
 					image.forDelete = result;
@@ -695,12 +695,7 @@ describe("版主權限測試", function() {
 				}
 				//delete related image collection
 				for(var i=0;i<idArr.length;i++){
-					mongoose.connection.db.listCollections({name: "image"+idArr[i]})
-					.next().then(function(info) {
-						if(info) {
-							mongoose.connection.db.dropCollection(info.name);
-						}
-					});
+					ImageModel(idArr[i]).deleteMany({}).catch(function(err){ console.log(err); });
 				}
 				//console.log(idArr);
 				cb(Dataset.deleteMany({_id:idArr}), function(err){
