@@ -19,6 +19,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900|Material+Icons" rel="stylesheet" type="text/css">
+<% if(meta.ga){ %>
 <!-- Global site tag (gtag.js) - Google Analytics -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=<%=meta.ga%>"></script>
 <script>
@@ -28,3 +29,4 @@
 
   gtag('config', '<%=meta.ga%>');
 </script>
+<% } %>
