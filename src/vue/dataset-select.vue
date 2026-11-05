@@ -124,6 +124,9 @@ export default {
 		},
 		ConfirmSelect: function(){
 			if(this.selectIndex == -1 && this.lastDataset){
+				// The preselected "last used" item never went through SelectItem,
+				// so the parent has not been told which dataset is selected yet.
+				this.$emit("change");
 				return this.$emit("confirm");
 			}
 			if(this.selectIndex < 0 || this.selectIndex >= this.datasetArr.length) return alert("請選擇資料集");
