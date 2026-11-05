@@ -21,6 +21,14 @@ var MediaRoute = require("./app/route/mediaRoute.js");
 mongoose.connect(Config.mongodb.url);
 mongoose.pluralize(null);
 
+// A fresh local S3 server has no bucket yet. In production the R2 bucket is
+// created in the Cloudflare dashboard and the token may not be allowed to create one.
+if(Config.mode != "production"){
+	require("./app/controller/storage.js").EnsureBucket().catch(function(err){
+		console.error("could not create storage bucket:", err.message);
+	});
+}
+
 //setup view & static file
 var rootDir = __dirname;
 var app = express();
