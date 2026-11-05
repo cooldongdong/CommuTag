@@ -3,7 +3,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js > log/stdout.txt 2> log/stderr.txt &",
-    "start-watch": "nodemon server.js",
+    "start-watch": "node --watch server.js",
     "build": "vite build",
     "build-watch": "vite build --watch",
     "test": "mocha --exit --recursive"
