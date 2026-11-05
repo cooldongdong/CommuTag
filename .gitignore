@@ -8,3 +8,4 @@ log/
 static/file/
 static/upload/
 dist/
+.env

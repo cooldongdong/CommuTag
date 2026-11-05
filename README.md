@@ -86,6 +86,7 @@ POST資料包括下列欄位:
 3. 在 Cloudflare R2 建一個 bucket（保持私有），並建立有該 bucket 讀寫權限的 API token，填進 `config.json` 的 `storage`
 4. `docker compose up -d --build`
 5. 網站只在本機 `127.0.0.1:8001` 開放，前面要接反向代理或 Cloudflare Tunnel 提供 HTTPS。正式模式的登入 cookie 只在 HTTPS 下有效
+   - 單台主機最簡單的做法：在 `.env` 寫入 `COMPOSE_FILE=docker-compose.yml:docker-compose.https.yml` 與 `DOMAIN=你的網域`，再執行步驟 4。Caddy 會自動申請 Let's Encrypt 憑證（網域要先指到主機，80 與 443 要開）
 6. 設定每日備份（見下方「資料庫備份」）
 
 MongoDB 沒有對外開放 port，只有網站程式連得到。

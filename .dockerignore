@@ -7,3 +7,4 @@ static/upload
 static/file
 python
 test
+.env

@@ -1,0 +1,28 @@
+# Optional HTTPS for a single host: Caddy gets a Let's Encrypt certificate for
+# $DOMAIN and forwards requests to the app. Point the domain's DNS at this
+# machine and open ports 80 and 443 first.
+#
+# Put these two lines in a .env file next to this one, then run
+# `docker compose up -d --build` as usual:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.https.yml
+#   DOMAIN=commutag.example.org
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - commutag
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+volumes:
+  # Holds the certificate. Losing it means asking Let's Encrypt again, which
+  # is rate limited, so do not delete it casually.
+  caddy-data:
+  caddy-config:
