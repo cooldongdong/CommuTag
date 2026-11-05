@@ -13,7 +13,9 @@ services:
       - mongo-dev:/data/db
   s3:
     image: chrislusf/seaweedfs
-    command: server -s3 -s3.config=/etc/s3.json
+    # SeaweedFS sizes its storage in 30 GB volumes by default and refuses writes
+    # when the disk cannot hold another one. Docker Desktop's disk is often smaller.
+    command: server -s3 -s3.config=/etc/s3.json -master.volumeSizeLimitMB=100 -volume.max=50
     ports:
       - "127.0.0.1:9010:8333"
     volumes:
