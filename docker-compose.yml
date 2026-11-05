@@ -4,7 +4,7 @@
 #
 # MongoDB has no published port: only the app can reach it, over the internal
 # network. The app listens on 127.0.0.1 only; put a reverse proxy or a
-# Cloudflare Tunnel in front for HTTPS.
+# Cloudflare Tunnel in front for HTTPS, or add docker-compose.https.yml.
 services:
   mongo:
     image: mongo:7
@@ -18,8 +18,11 @@ services:
       - mongo
     volumes:
       - ./config.json:/app/config.json:ro
-      - ./log:/app/log
+      - app-log:/app/log
     ports:
       - "127.0.0.1:8001:8001"
 volumes:
   mongo-data:
+  # A named volume rather than ./log: Docker creates a missing bind-mount
+  # directory as root, and the app runs as the unprivileged node user.
+  app-log:
