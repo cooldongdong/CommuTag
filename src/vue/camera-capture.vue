@@ -94,20 +94,19 @@ export default {
 			else{
 				option.video.facingMode = "environment";
 			}
-			//取得相機權限
-			if(navigator.getUserMedia) {
-				navigator.getUserMedia(option,
-					function(stream){
-						this.camStream = stream;
-						this.camStatus = "ok";
-						if(this.OnCamStart) this.OnCamStart();
-					}.bind(this),
-					function(error){
-						this.camStatus = "讀取相機失敗";
-					}.bind(this));
+			// navigator.getUserMedia is the old callback API. Safari and every iOS
+			// browser removed it, so only the promise API under mediaDevices works there.
+			if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+				navigator.mediaDevices.getUserMedia(option).then(function(stream){
+					this.camStream = stream;
+					this.camStatus = "ok";
+					if(this.OnCamStart) this.OnCamStart();
+				}.bind(this)).catch(function(error){
+					this.camStatus = "讀取相機失敗，請允許相機權限或使用右下角的檔案上傳功能";
+				}.bind(this));
 			}
 			else{
-				this.camStatus = "瀏覽器不支援相機";
+				this.camStatus = "瀏覽器不支援相機，請使用右下角的檔案上傳功能";
 			}
 			this.openCameraSelect = false;
 		},
