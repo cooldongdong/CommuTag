@@ -1,7 +1,7 @@
 <template>
 	<div class="image-upload">
 		<img :src="imageData" v-show="showPreview">
-		<input type="file" ref="uploadBt" hidden @change="UpdateFile">
+		<input type="file" accept="image/*" ref="uploadBt" hidden @change="UpdateFile">
 	</div>
 </template>
 
@@ -51,78 +51,56 @@ export default {
 		},
 		UpdateFile: function(e){
 			var files = e.target.files;
-			if(FileReader && files && files.length) {
-				var reader = new FileReader();
-				reader.onload = function(){		//read file ready
-					//convert dataUrl to arraybuffer
-					function _base64ToArrayBuffer(base64) {
-						var binary_string = atob(base64);
-						var len = binary_string.length;
-						var bytes = new Uint8Array(len);
-						for (var i = 0; i < len; i++) {
-							bytes[i] = binary_string.charCodeAt(i);
-						}
-						return bytes.buffer;
-					}
-					var data = _base64ToArrayBuffer(reader.result.split(",")[1]);
-					var tags = ExifReader.load(data);
-					this.exif = {};
-					//console.log(tags);
+			if(!files || !files.length) return;
+			var file = files[0];
+			e.target.value = "";	// picking the same file again should fire change again
+			this.file = file;
+			this.$emit("loading");
 
-					//get gps & time data from exif
-					if(tags.GPSLatitude && tags.GPSLongitude){
-						var lat = parseFloat(tags.GPSLatitude.description);
-						var lng = parseFloat(tags.GPSLongitude.description);
-						if(lat && lng){
-							this.exif.lat = lat;
-							this.exif.lng = lng;
-						}
-					}
-					
-					if(tags.DateTime){
-						var t = tags.DateTime.description.split(" ");
-						var d = t[0].replace(/:/g,"-");
-						this.exif.time = d+" "+t[1];
-					}
-					//console.log(this.exif);
-
-					var ShowImage = function(result){
-						var img = new Image();
-						img.onload = function(){	//image load ready
-							this.FitCanvasFromImage(img);
-							if(this.OnChange){
-								this.OnChange();
-							}
-						}.bind(this);
-						img.onerror = function(){
-							if(this.OnFail){
-								this.OnFail("Load File fail");
-							}
-						}.bind(this);
-						img.src = result;
-					}.bind(this);
-
-					var ext = this.file.name.substr(this.file.name.length-5);
-					if(ext.toLowerCase() == ".heic" && this.$q.platform.is.desktop){
-						//console.log("convert heic to jpg");
-						heic2any({
-							blob: this.file,
-							toType: "image/jpeg",
-						}).then(function(result){
-							var url = URL.createObjectURL(result);
-							ShowImage(url);
-						});
-					}
-					else{
-						//console.log("show image");
-						ShowImage(reader.result);
-					}
-
+			var Fail = function(){
+				if(this.OnFail) this.OnFail("Load File fail");
+			}.bind(this);
+			var ShowImage = function(url, onError){
+				var img = new Image();
+				img.onload = function(){
+					this.FitCanvasFromImage(img);
+					if(this.OnChange) this.OnChange();
 				}.bind(this);
-				this.file = files[0];
-				this.$emit("loading");
-				reader.readAsDataURL(files[0]);
-			}
+				img.onerror = onError || Fail;
+				img.src = url;
+			}.bind(this);
+			var isHeic = /\.(heic|heif)$/i.test(file.name) || /image\/hei[cf]/i.test(file.type);
+			var ConvertHeic = function(){
+				// Safari decodes HEIC itself; other browsers need the WebAssembly converter.
+				heic2any({blob: file, toType: "image/jpeg"}).then(function(result){
+					ShowImage(URL.createObjectURL(result));
+				}).catch(Fail);
+			};
+
+			var reader = new FileReader();
+			reader.onerror = Fail;
+			reader.onload = function(){
+				this.exif = {};
+				// EXIF is optional: a photo without it, or one the reader cannot parse,
+				// is still uploaded, just without a suggested location and time.
+				try{
+					var tags = ExifReader.load(reader.result, {expanded: true});
+					if(tags.gps && isFinite(tags.gps.Latitude) && isFinite(tags.gps.Longitude)){
+						this.exif.lat = tags.gps.Latitude;
+						this.exif.lng = tags.gps.Longitude;
+					}
+					var time = tags.exif && (tags.exif.DateTimeOriginal || tags.exif.DateTime);
+					if(time && time.description){
+						var t = time.description.split(" ");
+						this.exif.time = t[0].replace(/:/g,"-")+" "+t[1];
+					}
+				}
+				catch(err){
+					console.log("exif read fail", err);
+				}
+				ShowImage(URL.createObjectURL(file), isHeic ? ConvertHeic : Fail);
+			}.bind(this);
+			reader.readAsArrayBuffer(file);
 		},
 		FitCanvasFromImage: function(image){
 			var srcCanvas = document.createElement("canvas");

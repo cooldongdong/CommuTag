@@ -17,7 +17,7 @@
     "cropperjs": "^1.7.0",
     "csrf-sync": "^4.2.1",
     "ejs": "^3.1.10",
-    "exifreader": "^3.16.0",
+    "exifreader": "^4.54.0",
     "express": "^4.22.3",
     "express-session": "^1.19.0",
     "heic2any": "^0.0.4",
